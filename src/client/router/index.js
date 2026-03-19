@@ -11,7 +11,7 @@ const routes = [
     path: '/wab-blaster',
     name: 'Dashboard',
     component: () => import('../views/DashboardView.vue'),
-    meta: { title: 'PWASupperApps' },
+    meta: { title: 'WhatsApp Blaster' },
   },
   {
     path: '/shortlynkid',

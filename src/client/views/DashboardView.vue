@@ -20,7 +20,7 @@
     </Transition>
 
     <header class="header">
-      <h1>PWASupperApps</h1>
+      <h1>WhatsApp Blaster</h1>
       <p class="tagline">WhatsApp Blaster PWA</p>
     </header>
 
@@ -175,7 +175,7 @@
         <textarea
           id="message"
           v-model="messageTemplate"
-          placeholder="Halo, ini pesan dari PWASupperApps..."
+          placeholder="Halo, ini pesan dari WhatsApp Blaster..."
           rows="3"
         />
       </div>

@@ -12,7 +12,7 @@
           </svg>
         </div>
         <div class="app-card-body">
-          <span class="app-card-title">PWASupperApps</span>
+          <span class="app-card-title">WhatsApp Blaster</span>
           <span class="app-card-desc">WhatsApp Blaster PWA</span>
         </div>
       </router-link>
