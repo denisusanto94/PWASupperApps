@@ -33,17 +33,32 @@ export async function startBaileys(db) {
   });
 
   async function updateConnectionDoc(update) {
-    try {
-      let doc;
+    let success = false;
+    let attempts = 0;
+    while (!success && attempts < 5) {
+      attempts++;
       try {
-        doc = await db.get(CONNECTION_DOC_ID);
-      } catch (e) {
-        if (e.status !== 404) throw e;
-        doc = { _id: CONNECTION_DOC_ID };
+        let doc;
+        try {
+          doc = await db.get(CONNECTION_DOC_ID);
+        } catch (e) {
+          if (e.status !== 404) throw e;
+          doc = { _id: CONNECTION_DOC_ID };
+        }
+        await db.put({
+          ...doc,
+          ...update,
+          updatedAt: new Date().toISOString(),
+        });
+        success = true;
+      } catch (err) {
+        if (err.status === 409) {
+          // Konflik revision, coba lagi (loop akan mendapa kan revision terbaru di iterasi berikutnya)
+          continue;
+        }
+        console.error('updateConnectionDoc error:', err);
+        break;
       }
-      await db.put({ ...doc, ...update, updatedAt: new Date().toISOString() });
-    } catch (err) {
-      console.error('updateConnectionDoc:', err);
     }
   }
 
