@@ -1,0 +1,13 @@
+node_modules/
+dist/
+database/
+sessions/
+.env
+*.log
+.DS_Store
+template-classic/
+template-montain/
+src/temmplate/wedding/assets/classic/bgm.mp3
+src/temmplate/wedding/assets/montain/bgm.mp3
+public/template/wedding/assets/classic/bgm.mp3
+public/template/wedding/assets/montain/bgm.mp3
