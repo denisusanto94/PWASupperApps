@@ -5,6 +5,7 @@ import expressPouchDB from 'express-pouchdb';
 import PouchDB from 'pouchdb';
 import { startBaileys, restartConnection } from './src/server/baileys.js';
 import { startWorker } from './src/server/worker.js';
+import { initDbMigrations } from './src/server/init_db_schemas.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -51,6 +52,9 @@ app.get('*', (_req, res) => {
 const db = new PouchDBWithPath('wa_database');
 
 async function main() {
+  // Jalankan migrasi DB (Index & Seed) otomatis pada startup
+  await initDbMigrations(dbPath);
+  
   await startBaileys(db);
   await startWorker(db);
   app.listen(PORT, () => {

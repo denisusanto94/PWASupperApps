@@ -24,6 +24,7 @@ Aplikasi ini terdiri dari beberapa modul utama yang dapat diakses melalui dashbo
     *   **Layout Adaptif**: Antarmuka 2-kolom pada desktop (30% list, 70% chat) dan gaya WhatsApp pada mobile.
     *   **Fitur Call**: UI terintegrasi untuk Video Call dan Voice Call.
     *   **Privacy Control**: Tombol hapus seluruh data dengan proteksi password (admin/owner).
+    *   **Auto-Sync & Migration**: Otomatisasi pembuatan index database saat startup.
 
 4.  **Wedding Invitation (Undangan Digital)**:
     *   Pembuat undangan pernikahan digital dengan berbagai pilihan template premium.
@@ -140,7 +141,11 @@ Jika Anda ingin menggunakan database CouchDB native sebagai pusat sinkronisasi:
    ```
    *Pilih mode 'standalone' dan set password admin saat instalasi.*
 
-2. **Penting: Konfigurasi CORS** (agar browser bisa akses):
+2. **Penting: Konfigurasi CORS** (agar browser bisa akses):### 3. Automatisasi Database (Auto-Migration)
+Server kini dilengkapi dengan fitur **Auto-Migration** yang akan mendeteksi dan membuat **Mango Indexes** serta skema awal secara otomatis setiap kali aplikasi dijalankan (`npm start`). Hal ini memastikan:
+*   Pencarian pesan chat dan history WABlaster lebih cepat melalui indexing otomatis.
+*   Struktur data (schema) yang konsisten di semua lingkungan.
+*   Seeding data awal untuk pengaturan default aplikasi.
    Buka dashboard CouchDB (Fauxton) di `http://IP-SERVER:5984/_utils` atau edit `local.ini`:
    ```ini
    [httpd]
