@@ -19,10 +19,14 @@
       </div>
     </Transition>
 
-    <header class="header">
-      <h1>WhatsApp Blaster</h1>
-      <p class="tagline">WhatsApp Blaster PWA</p>
-    </header>
+    <Teleport to="#app-header-portal">
+      <div class="getlynkid-header-inner">
+        <h1 class="header-title">WhatsApp Blaster</h1>
+        <div class="header-actions">
+          <span class="header-tagline">WhatsApp Blaster PWA</span>
+        </div>
+      </div>
+    </Teleport>
 
     <section class="card connection-card">
       <h2>Status WhatsApp</h2>

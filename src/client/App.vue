@@ -56,21 +56,24 @@ body {
 }
 
 .app-header {
-  background: var(--card);
-  border-bottom: 1px solid #334155;
+  background: rgba(30, 41, 59, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   position: sticky;
   top: 0;
   z-index: 1000;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
 .app-header-container {
   display: flex;
   align-items: center;
-  padding: 0.5rem 1rem;
-  max-width: 1200px;
+  padding: 0.6rem 1.25rem;
+  max-width: 1400px;
   margin: 0 auto;
   width: 100%;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .header-portal {
@@ -83,21 +86,46 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 32px;
+  height: 32px;
   color: var(--text);
   text-decoration: none;
-  border-radius: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
 .back-link:hover {
-  background: #334155;
+  background: rgba(37, 211, 102, 0.2);
   color: var(--green);
+  transform: scale(1.1);
+  box-shadow: 0 0 10px rgba(37, 211, 102, 0.3);
 }
 
 .back-icon {
-  font-size: 1.5rem;
-  line-height: 1;
+  font-size: 1.1rem;
+  font-weight: bold;
+}
+
+/* Common Header Styles for Teleported Content */
+.getlynkid-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.header-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #25D366;
+}
+
+.header-tagline {
+  font-size: 0.75rem;
+  color: var(--muted);
 }
 
 .app-main {

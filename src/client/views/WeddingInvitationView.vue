@@ -1,9 +1,14 @@
 <template>
   <div class="wedding-view">
+    <Teleport to="#app-header-portal">
+      <div class="getlynkid-header-inner">
+        <h1 class="header-title">Wedding Invitation</h1>
+      </div>
+    </Teleport>
+
     <div class="wedding-hero">
       <div class="hero-ornament top" aria-hidden="true">✦ ✦ ✦</div>
-      <h1 class="wedding-title">Wedding Invitation</h1>
-      <p class="wedding-subtitle">Buat undangan pernikahan digital — pilih template website & isi data</p>
+      <p class="wedding-subtitle">Buat undangan pernikahan digital — pilih template & isi data</p>
       <div class="hero-ornament bottom" aria-hidden="true">♥</div>
     </div>
 

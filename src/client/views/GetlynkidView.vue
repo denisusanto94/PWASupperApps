@@ -235,19 +235,6 @@ onMounted(() => {
   color: #e2e8f0;
 }
 
-.getlynkid-header-inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-}
-
-.header-title {
-  margin: 0;
-  font-size: 1.25rem;
-  color: #25D366;
-}
-
 .header-actions {
   display: flex;
   gap: 0.5rem;
@@ -256,12 +243,6 @@ onMounted(() => {
 .btn-save {
   padding: 0.4rem 0.8rem !important;
   font-size: 0.85rem !important;
-}
-
-.btn-back {
-  text-decoration: none;
-  color: #e2e8f0;
-  font-size: 1.5rem;
 }
 
 .getlynkid-layout {
