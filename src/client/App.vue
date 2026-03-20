@@ -1,9 +1,12 @@
 <template>
   <div class="app-shell">
     <header v-if="showBackHeader" class="app-header">
-      <router-link to="/" class="back-link" aria-label="Kembali ke home">
-        <span class="back-icon">←</span>
-      </router-link>
+      <div class="app-header-container">
+        <router-link to="/" class="back-link" aria-label="Kembali ke home">
+          <span class="back-icon">←</span>
+        </router-link>
+        <div id="app-header-portal" class="header-portal"></div>
+      </div>
     </header>
     <main class="app-main">
       <router-view />
@@ -53,11 +56,27 @@ body {
 }
 
 .app-header {
+  background: var(--card);
+  border-bottom: 1px solid #334155;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.app-header-container {
   display: flex;
   align-items: center;
   padding: 0.5rem 1rem;
-  background: var(--card);
-  border-bottom: 1px solid #334155;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  gap: 1rem;
+}
+
+.header-portal {
+  flex-grow: 1;
+  display: flex;
+  align-items: center;
 }
 
 .back-link {

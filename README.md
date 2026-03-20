@@ -10,7 +10,7 @@ Aplikasi ini terdiri dari beberapa modul utama yang dapat diakses melalui dashbo
     *   Impor kontak dari file VCF (vCard).
     *   Template pesan dinamis (Ucapan Hari Raya, dll).
     *   Sinkronisasi riwayat pengiriman real-time.
-2.  **Shortlynk.id**: Utilitas untuk pemendekan tautan (Short link).
+2.  **getlynk.id**: Utilitas untuk pemendekan tautan (Short link) & Bio Link.
 3.  **Instant Messaging**: Fitur chat cepat.
 4.  **Wedding Invitation (Undangan Digital)**:
     *   Pembuat undangan pernikahan digital dengan berbagai pilihan template premium.

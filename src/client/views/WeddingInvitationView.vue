@@ -13,20 +13,31 @@
         Pilih template website undangan
       </h2>
       <p class="section-desc">Tampilan halaman website undangan Anda</p>
-      <div class="template-grid">
-        <button
-          v-for="t in templates"
-          :key="t.id"
-          type="button"
-          class="template-card"
-          :class="{ selected: selectedTemplateId === t.id, 'is-developing': t.isDeveloping }"
-          :data-id="t.id"
-          @click="selectedTemplateId = t.id"
-        >
-          <div class="template-preview" :style="{ background: t.previewBg }">
-            <span class="template-preview-label">{{ t.name }}</span>
-            <span v-if="t.isDeveloping" class="developing-text">Sedang Dikembangkan...</span>
-          </div>
+      
+      <div class="template-carousel-container">
+        <button type="button" class="carousel-nav prev" @click="scrollCarousel(-1)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </button>
+        
+        <div class="template-carousel-wrapper" ref="carouselRef">
+          <button
+            v-for="t in templates"
+            :key="t.id"
+            type="button"
+            class="template-card"
+            :class="{ selected: selectedTemplateId === t.id, 'is-developing': t.isDeveloping }"
+            :data-id="t.id"
+            @click="selectedTemplateId = t.id"
+          >
+            <div class="template-preview" :style="{ background: t.previewBg }">
+              <span class="template-preview-label">{{ t.name }}</span>
+              <span v-if="t.isDeveloping" class="developing-text">Sedang Dikembangkan...</span>
+            </div>
+          </button>
+        </div>
+
+        <button type="button" class="carousel-nav next" @click="scrollCarousel(1)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
         </button>
       </div>
     </section>
@@ -295,6 +306,15 @@ function fileToBase64(file) {
 }
 
 const router = useRouter();
+const carouselRef = ref(null);
+
+function scrollCarousel(dir) {
+  if (carouselRef.value) {
+    const scrollAmount = carouselRef.value.offsetWidth * 0.8 * dir;
+    carouselRef.value.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+  }
+}
+
 async function goPreview() {
   const payload = {
     ...form,
@@ -460,24 +480,34 @@ async function goPreview() {
   color: var(--text);
 }
 
-/* Template grid */
+/* Template Carousel */
 .template-section {
   padding: 1.5rem 0;
+  position: relative;
 }
 
-.template-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+.template-carousel-container {
+  position: relative;
+  margin: 0 -0.5rem;
+}
+
+.template-carousel-wrapper {
+  display: flex;
   gap: 1rem;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+  padding: 0.5rem;
+  scrollbar-width: none; /* Firefox */
 }
 
-@media (max-width: 560px) {
-  .template-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
+.template-carousel-wrapper::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
 }
 
 .template-card {
+  flex: 0 0 calc((100% / 4.5) - 0.8rem); /* Desktop: 4.5 items */
+  scroll-snap-align: start;
   padding: 0;
   border: 2px solid rgba(148, 163, 184, 0.35);
   border-radius: 14px;
@@ -485,6 +515,55 @@ async function goPreview() {
   cursor: pointer;
   overflow: hidden;
   transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+
+@media (max-width: 900px) {
+  .template-card {
+    flex: 0 0 calc((100% / 3.8) - 0.8rem); /* Tablet: 3.8 items */
+  }
+}
+
+@media (max-width: 600px) {
+  .template-card {
+    flex: 0 0 calc((100% / 2.1) - 0.8rem); /* Mobile: 2.1 items */
+  }
+}
+
+.carousel-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 10;
+  background: #fff;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--wedding-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  opacity: 0.8;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.carousel-nav:hover {
+  opacity: 1;
+  transform: translateY(-50%) scale(1.1);
+}
+
+.carousel-nav svg {
+  width: 18px;
+  height: 18px;
+}
+
+.carousel-nav.prev { left: -0.5rem; }
+.carousel-nav.next { right: -0.5rem; }
+
+@media (max-width: 600px) {
+  .carousel-nav { display: none; } /* Hide buttons on mobile to use touch swipe */
 }
 
 .template-card:hover {

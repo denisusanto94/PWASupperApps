@@ -14,10 +14,10 @@ const routes = [
     meta: { title: 'WhatsApp Blaster' },
   },
   {
-    path: '/shortlynkid',
-    name: 'Shortlynkid',
-    component: () => import('../views/ShortlynkidView.vue'),
-    meta: { title: 'shortlynk.id' },
+    path: '/getlynkid',
+    name: 'Getlynkid',
+    component: () => import('../views/GetlynkidView.vue'),
+    meta: { title: 'getlynk.id' },
   },
   {
     path: '/instant-chat',
