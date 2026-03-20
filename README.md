@@ -1,234 +1,86 @@
 # PWASupperApps
 
-**PWASupperApps** adalah platform multi-aplikasi berbasis Progressive Web App (PWA) yang menggabungkan berbagai utilitas produktivitas dalam satu ekosistem modern. Dibangun menggunakan **Vue 3**, **PouchDB**, dan **Baileys** untuk integrasi WhatsApp yang handal, dengan fokus pada keamanan dan antarmuka premium.
+**PWASupperApps** adalah platform multi-aplikasi berbasis Progressive Web App (PWA) yang menggabungkan berbagai utilitas produktivitas dalam satu ekosistem modern. Dibangun menggunakan **Vue 3**, **PouchDB**, dan **Baileys** untuk integrasi WhatsApp, serta sinkronisasi real-time ke **MySQL**. Fokus utama aplikasi ini adalah keamanan, persistensi data offline-first, dan antarmuka premium.
 
 ## 🚀 Fitur Utama
 
-Aplikasi ini terdiri dari beberapa modul utama yang dapat diakses melalui dashboard terpusat:
+Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)**:
 
 1.  **WaBlaster (WhatsApp Blaster)**:
-    *   Kirim pesan WhatsApp bulk dengan jeda acak (10-15 detik) untuk menghindari deteksi spam.
-    *   Impor kontak dari file VCF (vCard).
-    *   Template pesan dinamis (Ucapan Hari Raya, dll).
-    *   Sinkronisasi riwayat pengiriman real-time melalui worker background.
+    *   Kirim pesan WhatsApp bulk dengan jeda acak untuk menghindari deteksi spam.
+    *   Impor kontak dari file VCF.
+    *   Sinkronisasi riwayat pengiriman real-time.
 
-2.  **getlynk.id (Bio Link Tool)**:
-    *   Utilitas pemendekan tautan (Short link) & Bio Link kustom.
-    *   Layout responsif: Desktop (Side-by-side editor/preview), Mobile (Stacked).
+2.  **getlynk.id (Bio Link Tool) - [Auth Protected]**:
+    *   Utilitas pemendekan tautan & Bio Link kustom.
+    *   **Fitur Login & Registrasi**: Setiap pengguna memiliki editor dan data konten privat.
     *   Berbagai blok konten: Text, Image, Video, Link, Social Connect.
-    *   Integrasi header global untuk navigasi cepat.
 
-3.  **Instant Messaging (Secure Chat)**:
-    *   **Enkripsi E2EE**: Seluruh pesan teks dienkripsi ujung-ke-ujung menggunakan algoritma **AES-256-GCM** via Web Crypto API.
-    *   **Media Sharing**: Support kirim gambar, video (in-app playback), audio (voice note), dan dokumen.
-    *   **Layout Adaptif**: Antarmuka 2-kolom pada desktop (30% list, 70% chat) dan gaya WhatsApp pada mobile.
-    *   **Fitur Call**: UI terintegrasi untuk Video Call dan Voice Call.
-    *   **Privacy Control**: Tombol hapus seluruh data dengan proteksi password (admin/owner).
-    *   **Auto-Sync & Migration**: Otomatisasi pembuatan index database saat startup.
+3.  **Instant Messaging (Secure Chat) - [Auth Protected]**:
+    *   **Enkripsi E2EE**: Pesan dienkripsi ujung-ke-ujung via **AES-256-GCM**.
+    *   **Secure Access**: Memerlukan username & password untuk akses chat. 
+    *   **Media Sharing**: Support gambar, video, audio, dan dokumen.
+    *   **Real-time Sync**: Pesan tersinkronisasi antar perangkat secara instan.
 
-4.  **Wedding Invitation (Undangan Digital)**:
-    *   Pembuat undangan pernikahan digital dengan berbagai pilihan template premium.
-    *   **Template Carousel**: Pilihan template menggunakan carousel responsif (Desktop: 4.5 items, Tablet: 3.8, Mobile: 2.1).
-    *   **Template Classic**: Desain elegan dengan nuansa tradisional/mewah.
-    *   **Template Montain**: Desain modern dengan estetika alam/pegunungan.
-    *   Fitur preview langsung dengan scroll vertikal mandiri.
+4.  **Wedding Invitation (Undangan Digital) - [Auth Protected]**:
+    *   Pembuat undangan pernikahan digital dengan template premium.
+    *   **User Partitioning**: Progres pembuatan undangan disimpan berdasarkan akun pengguna.
+    *   **Multi-Template**: Pilihan template (Classic, Montain, dll) yang responsif.
 
-## ✨ Antarmuka Premium & UX
+## ✨ Fitur Sistem & UX Modern
 
-*   **Global App Header**: Header glassmorphism dengan efek `backdrop-filter: blur`, navigasi portal teleport, dan tombol back minimalis.
-*   **Tag-Style Dashboard**: Tombol aplikasi di home menggunakan desain "pill-tag" modern dengan ikon ringkas.
-*   **Dark Mode Native**: Tema gelap eksklusif yang dioptimalkan untuk kenyamanan mata dan estetika modern.
-*   **Smooth Motion**: Animasi bounce dan fade pada modal serta transisi halus antar halaman.
+*   **Hybrid Storage Bridge**: Sinkronisasi otomatis data PouchDB (NoSQL) ke **MySQL** secara real-time untuk kebutuhan reporting dan backup terpusat.
+*   **Global Toast System**: Notifikasi cerdas (Success, Error, Warning) yang muncul secara *full-width* di bagian atas layar, menggantikan dialog alert tradisional.
+*   **Offline-First & PWA**: Akses data tetap lancar meskipun koneksi terputus, otomatis sinkron saat kembali online.
+*   **Branded Interface**: Favicon dan ikon aplikasi yang telah diperbarui untuk identitas visual yang seragam.
 
 ## 🛠️ Tech Stack
 
-*   **Frontend**: Vue 3 (Composition API), Tailwind CSS, Vue Router.
-*   **Database**: PouchDB (Browser & Server sync) untuk persistensi data offline-first.
-*   **Security**: Web Crypto API (AES-256-GCM) untuk enkripsi chat.
+*   **Frontend**: Vue 3 (Composition API), Tailwind CSS / Vanilla CSS, Vue Router.
 *   **Backend**: Node.js, Express, Express-PouchDB.
-*   **WhatsApp Engine**: Baileys (Library koneksi WA socket).
-*   **Build Tool**: Vite dengan `vite-plugin-pwa`.
-
-## 📂 Struktur Proyek
-
-```text
-PWASupperApps/
-├── dist/                # Hasil build produksi (auto-generated)
-├── database/            # Database server-side PouchDB (auto-generated)
-├── sessions/            # Sesi koneksi WhatsApp (gitignored)
-├── public/              # Aset statis & template asset
-├── src/
-│   ├── client/          # Frontend source code
-│   │   ├── views/       # Halaman-halaman aplikasi (Dashboard, Home, dll)
-│   │   ├── db.js        # Konfigurasi PouchDB & Sync logic
-│   │   └── App.vue      # Entry point Vue dengan Global Header Portal
-│   ├── server/          # Backend source code
-│   │   ├── baileys.js   # Logic koneksi & pengiriman WhatsApp
-│   │   └── worker.js    # Background worker untuk antrian pesan
-│   └── template/        # Template Vue untuk undangan digital
-├── index.js             # Server utama (Express)
-├── vite.config.js       # Konfigurasi PWA & Vite build
-└── package.json         # Dependensi & Scripts
-```
+*   **Database**: PouchDB (Local/Server), MySQL (Sync Bridge via `mysql2`).
+*   **Security**: Web Crypto API (AES-256-GCM) & PouchDB-based Auth.
+*   **WhatsApp**: Baileys Socket Connectivity.
 
 ## ⚙️ Cara Instalasi & Penggunaan
 
-### 1. Persiapan
-Pastikan Anda sudah menginstal **Node.js** di sistem Anda.
-```bash
-# Clone repositori ini
-cd PWASupperApps
+### 1. Persiapan Database MySQL
+Buatlah database baru di MySQL (misal: `pwa-super-apps`). Aplikasi akan otomatis membuat tabel `pwa_data` saat pertama kali dijalankan.
 
-# Instal dependensi
-npm install
+### 2. Konfigurasi Lingkungan (.env)
+Salin `.env.example` ke `.env` dan atur koneksi database Anda:
+```env
+PORT=3000
+DB_NAME=wa_database
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASS=
+MYSQL_DB=pwa-super-apps
 ```
 
-### 2. Menjalankan Aplikasi
+### 3. Jalankan Aplikasi
 ```bash
-# Build frontend untuk produksi
-npm run build
+# Instal dependensi
+npm install
 
-# Menjalankan server
+# Jalankan migrasi data lama ke MySQL (Opsional jika ada data lama)
+node migrate.js
+
+# Build frontend & Start server
+npm run build
 npm start
 ```
 
-### 3. Penggunaan
-1.  Buka browser ke `http://localhost:3000`.
-2.  Pilih modul aplikasi yang diinginkan dari Home Dashboard.
-3.  Untuk **Instant Messaging**: Masukkan username pertama kali, cari teman bicara, dan mulai chat terenkripsi.
-4.  Untuk **Wedding Invitation**: Telusuri template melalui carousel, pilih, dan pratinjau desain undangan.
+## 📂 Struktur Penting Proyek
+*   `index.js`: Server utama dengan MySQL Bridge logic.
+*   `migrate.js`: Skrip migrasi data dari PouchDB ke MySQL.
+*   `src/server/init_db_schemas.js`: Inisialisasi index NoSQL otomatis.
+*   `src/client/toast.js`: Sistem notifikasi global.
+*   `src/client/db.js`: Konfigurasi sinkronisasi PouchDB.
 
-## 🛠️ Tutorial Lengkap: Deployment & Sinkronisasi Server
-
-Ikuti langkah-langkah di bawah ini untuk memindahkan aplikasi dari lokal ke server produksi (VPS).
-
-### Bagian 1: Persiapan Server (VPS)
-Gunakan VPS dengan OS Ubuntu 20.04/22.04. Login via SSH dan jalankan:
-```bash
-# Update sistem
-sudo apt update && sudo apt upgrade -y
-
-# Instal Node.js (v18+) & Git
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt install -y nodejs git
-```
-
-### Bagian 2: Deploy Aplikasi (Frontend & Backend)
-1. **Clone project ke server**:
-   ```bash
-   git clone https://github.com/denisusanto94/PWASupperApps.git
-   cd PWASupperApps
-   ```
-2. **Instal dependensi & Build**:
-   ```bash
-   npm install
-   npm run build  # Menghasilkan folder /dist
-   ```
-3. **Jalankan aplikasi dengan PM2** (agar tetap hidup 24/7):
-   ```bash
-   sudo npm install pm2 -g
-   pm2 start index.js --name pwa-super-apps
-   pm2 save
-   pm2 startup
-   ```
-
-### Bagian 3: Automatisasi Database (Auto-Migration)
-Server kini dilengkapi dengan fitur **Auto-Migration** yang akan mendeteksi dan membuat **Mango Indexes** serta skema awal secara otomatis setiap kali aplikasi dijalankan (`npm start`). Hal ini memastikan:
-*   Pencarian pesan chat dan history WABlaster lebih cepat melalui indexing otomatis.
-*   Struktur data (schema) yang konsisten di semua lingkungan.
-*   Seeding data awal untuk pengaturan default aplikasi.
-
-### Bagian 4: Konfigurasi CouchDB (Opsional untuk Skala Besar)
-Jika Anda ingin menggunakan database CouchDB native sebagai pusat sinkronisasi:
-
-1. **Instal CouchDB**:
-   ```bash
-   sudo apt install -y couchdb
-   ```
-   *Pilih mode 'standalone' dan set password admin saat instalasi.*
-
-2. **Penting: Konfigurasi CORS** (agar browser bisa akses):
-   Buka dashboard CouchDB (Fauxton) di `http://IP-SERVER:5984/_utils` atau edit `local.ini`:
-   ```ini
-   [httpd]
-   enable_cors = true
-
-   [cors]
-   origins = *
-   methods = GET, POST, PUT, DELETE, OPTIONS
-   credentials = true
-   ```
-
-3. **Ganti URL Database di Frontend**:
-   Buka file `src/client/db.js` und ubah konstanta `remoteDb`:
-   ```javascript
-   const remoteDb = new PouchDB('https://user:pass@domain-anda.com/db_name');
-   ```
-
-### Bagian 5: Sinkronisasi dengan Database Lain (MySQL, Oracle, MongoDB, Postgres, SQL Server)
-Jika Anda membutuhkan integrasi data dengan sistem database eksternal:
-
-#### 1. MySQL & PostgreSQL (Relational)
-*   **Instalasi**: `sudo apt install mysql-server postgresql -y`
-*   **Langkah**: Gunakan adapter `pouchdb-adapter-mysql` atau `pouchdb-adapter-postgresql`.
-*   **Konfigurasi**:
-    ```javascript
-    import MySqlAdapter from 'pouchdb-adapter-mysql';
-    PouchDB.plugin(MySqlAdapter);
-    const db = new PouchDB('mysql://user:pass@localhost:3306/db_name', {adapter: 'mysql'});
-    ```
-
-#### 2. MongoDB (NoSQL)
-*   **Instalasi**: `sudo apt install mongodb -y`
-*   **Langkah**: Gunakan `pouchdb-adapter-mongodb`. Sangat efisien untuk menyimpan dokumen JSON dalam skala besar.
-
-#### 3. Oracle & SQL Server (Enterprise)
-*   **Metode Bridge**: Gunakan **Changes Listener** pada Node.js untuk memantau setiap perubahan dokumen dan melakukan sinkronisasi ke tabel SQL.
-*   **Contoh Implementasi**:
-    ```javascript
-    db.changes({ live: true, include_docs: true }).on('change', async (change) => {
-      // Gunakan library 'oracledb' atau 'mssql' untuk melakukan UPSERT
-      console.log(`Menyinkronkan dok ${change.id} ke database Enterprise...`);
-    });
-    ```
-
-### Bagian 6: Pengaturan Domain & SSL (Nginx)
-Aplikasi PWA & Enkripsi AES-256 **WAJIB menggunakan HTTPS**.
-
-1. **Instal Nginx**:
-   ```bash
-   sudo apt install nginx
-   ```
-2. **Konfigurasi Reverse Proxy**:
-   Buat file `/etc/nginx/sites-available/pwasupperapps`:
-   ```nginx
-   server {
-       server_name domain-anda.com;
-       location / {
-           proxy_pass http://localhost:3000;
-           proxy_http_version 1.1;
-           proxy_set_header Upgrade $http_upgrade;
-           proxy_set_header Connection 'upgrade';
-           proxy_set_header Host $host;
-           proxy_cache_bypass $http_upgrade;
-       }
-   }
-   ```
-3. **Pasang SSL (Certbot)**:
-   ```bash
-   sudo apt install certbot python3-certbot-nginx
-   sudo certbot --nginx -d domain-anda.com
-   ```
-
----
-**Catatan**: Seluruh data yang mengalir antar perangkat akan otomatis ter-sinkronisasi melalui API server yang telah Anda pasang di atas.
-
-## 📱 PWA – Instalasi di Perangkat
-
-Aplikasi ini mendukung fitur PWA sepenuhnya:
-*   **Chrome/Edge (Desktop/Android)**: Klik ikon instal di address bar atau menu titik tiga → "Install PWASupperApps".
-*   **Safari (iOS)**: Klik ikon Bagikan (Share) → "Tambahkan ke Layar Utama" (Add to Home Screen).
-*   **Offline Support**: Aset dan data dasar tetap dapat diakses meskipun tanpa koneksi internet.
+## 🛠️ Deployment VPS & Sinkronisasi
+Untuk deployment lengkap di server produksi, gunakan PM2 dan Nginx dengan SSL (Certbot). Aplikasi ini **WAJIB** berjalan di HTTPS agar fitur PWA dan Web Crypto (Enkripsi) dapat berfungsi di browser mobile.
 
 ---
 **Author**: [denisusanto94@gmail.com](mailto:denisusanto94@gmail.com)  

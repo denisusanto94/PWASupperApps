@@ -9,7 +9,7 @@ import fs from 'fs';
 import QRCode from 'qrcode';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SESSIONS_DIR = path.resolve(__dirname, '..', '..', 'sessions');
+const SESSIONS_DIR = path.resolve(__dirname, '..', '..', process.env.SESSIONS_DIR || './sessions');
 
 function ensureSessionsDir() {
   if (!fs.existsSync(SESSIONS_DIR)) {

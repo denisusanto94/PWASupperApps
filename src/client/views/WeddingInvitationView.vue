@@ -6,7 +6,34 @@
       </div>
     </Teleport>
 
-    <div class="wedding-hero">
+    <div v-if="!currentUser" class="auth-screen">
+      <div class="auth-card">
+        <div class="auth-icon-wrapper">💌</div>
+        <h2>Undangan Digital</h2>
+        <p>{{ isRegisterMode ? 'Daftar akun baru' : 'Masuk untuk mengelola undangan' }}</p>
+        
+        <div class="auth-form">
+          <input v-model="authForm.username" type="text" placeholder="Username..." class="auth-input" />
+          <input v-model="authForm.password" type="password" placeholder="Password..." class="auth-input" />
+          
+          <button @click="handleAuth" class="btn-auth" :disabled="authLoading">
+            {{ isRegisterMode ? 'Daftar & Buat Undangan' : 'Masuk' }}
+          </button>
+          
+          <button @click="isRegisterMode = !isRegisterMode" class="btn-toggle-auth">
+            {{ isRegisterMode ? 'Sudah punya akun? Masuk' : 'Belum punya akun? Daftar' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-else class="wedding-content">
+      <div class="user-meta-bar">
+        <span>Halo, <strong>@{{ currentUser }}</strong></span>
+        <button @click="logout" class="btn-logout">Logout</button>
+      </div>
+
+      <div class="wedding-hero">
       <div class="hero-ornament top" aria-hidden="true">✦ ✦ ✦</div>
       <p class="wedding-subtitle">Buat undangan pernikahan digital — pilih template & isi data</p>
       <div class="hero-ornament bottom" aria-hidden="true">♥</div>
@@ -84,7 +111,7 @@
         <div class="form-group">
           <label>Foto Mempelai Pria (Opsional)</label>
           <label class="upload-zone upload-zone-sm" :class="{ filled: form.fotoPriaFile }">
-            <input type="file" accept="image/*" class="upload-input" @change="e => form.fotoPriaFile = e.target.files?.[0] || null" />
+            <input type="file" accept="image/*" class="upload-input" @change="onFotoPriaChange" />
             <span v-if="!form.fotoPriaFile" class="upload-placeholder">Upload Foto</span>
             <span v-else class="upload-filename">{{ form.fotoPriaFile.name }}</span>
           </label>
@@ -118,7 +145,7 @@
         <div class="form-group">
           <label>Foto Mempelai Wanita (Opsional)</label>
           <label class="upload-zone upload-zone-sm" :class="{ filled: form.fotoWanitaFile }">
-            <input type="file" accept="image/*" class="upload-input" @change="e => form.fotoWanitaFile = e.target.files?.[0] || null" />
+            <input type="file" accept="image/*" class="upload-input" @change="onFotoWanitaChange" />
             <span v-if="!form.fotoWanitaFile" class="upload-placeholder">Upload Foto</span>
             <span v-else class="upload-filename">{{ form.fotoWanitaFile.name }}</span>
           </label>
@@ -209,7 +236,7 @@
         <div class="form-group">
           <label>E-Angpao QRIS (Opsional)</label>
           <label class="upload-zone upload-zone-sm" :class="{ filled: form.eAngpaoQrisFile }">
-            <input type="file" accept="image/*" class="upload-input" @change="e => form.eAngpaoQrisFile = e.target.files?.[0] || null" />
+            <input type="file" accept="image/*" class="upload-input" @change="onQrisChange" />
             <span v-if="!form.eAngpaoQrisFile" class="upload-placeholder">Upload QRIS</span>
             <span v-else class="upload-filename">{{ form.eAngpaoQrisFile.name }}</span>
           </label>
@@ -228,12 +255,77 @@
       </div>
     </section>
 
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import PouchDB from 'pouchdb-browser';
+import { WEDDING_DB_NAME, WEDDING_USERS_DB_NAME, syncModule } from '../db.js';
+import { showToast } from '../toast.js';
+
+const db = new PouchDB(WEDDING_DB_NAME);
+const userDb = new PouchDB(WEDDING_USERS_DB_NAME);
+
+// Auth State
+const currentUser = ref(localStorage.getItem('wedding_username') || null);
+const isRegisterMode = ref(false);
+const authLoading = ref(false);
+const authForm = reactive({ username: '', password: '' });
+
+const handleAuth = async () => {
+  const { username, password } = authForm;
+  if (!username.trim() || !password.trim()) return;
+  authLoading.value = true;
+  try {
+    if (isRegisterMode.value) {
+      try {
+        await userDb.get(username);
+        showToast('Username sudah terpakai.', 'error');
+      } catch (err) {
+        if (err.status === 404) {
+          await userDb.put({ _id: username, password, createdAt: new Date().toISOString() });
+          showToast('Berhasil daftar! Silakan masuk.');
+          isRegisterMode.value = false;
+        } else throw err;
+      }
+    } else {
+      try {
+        const userDoc = await userDb.get(username);
+        if (userDoc.password === password) {
+          currentUser.value = username;
+          localStorage.setItem('wedding_username', username);
+          await loadData();
+        } else {
+          showToast('Password salah.', 'error');
+        }
+      } catch (err) {
+        if (err.status === 404) showToast('User tidak ditemukan.', 'error');
+        else throw err;
+      }
+    }
+  } catch (err) {
+    console.error('Auth error:', err);
+    showToast('Gagal autentikasi.', 'error');
+  } finally {
+    authLoading.value = false;
+  }
+};
+
+const logout = () => {
+  currentUser.value = null;
+  localStorage.removeItem('wedding_username');
+  resetForm();
+};
+
+const resetForm = () => {
+  form.priaFull = '';
+  form.priaNick = '';
+  // ... reseting other form fields if needed or just reload
+  location.reload(); 
+};
 
 const selectedTemplateId = ref('classic');
 const templates = [
@@ -285,6 +377,12 @@ const form = reactive({
   storyText3: 'Dengan restu keluarga dan petunjuk Allah SWT, kami memutuskan untuk melangkah ke jenjang pernikahan sebagai ibadah seumur hidup.',
   // Links
   youtubeLiveUrl: '',
+  eAngpaoQris: null, // Base64
+  latarLagu: null, // Base64
+  gallery: [], // Array of Base64
+  fotoPria: null, // Base64
+  fotoWanita: null, // Base64
+  // File refs (for UI name display only)
   eAngpaoQrisFile: null,
   latarLaguFile: null,
   galleryFiles: [],
@@ -292,13 +390,43 @@ const form = reactive({
   fotoWanitaFile: null,
 });
 
-function onLatarLaguChange(e) {
-  form.latarLaguFile = e.target.files?.[0] || null;
+async function onLatarLaguChange(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  form.latarLaguFile = file;
+  form.latarLagu = await fileToBase64(file);
 }
 
-function onGalleryChange(e) {
+async function onGalleryChange(e) {
   const files = e.target.files;
-  form.galleryFiles = files?.length ? Array.from(files) : [];
+  if (!files?.length) return;
+  form.galleryFiles = Array.from(files);
+  const arr = [];
+  for(let f of form.galleryFiles) {
+    arr.push(await fileToBase64(f));
+  }
+  form.gallery = arr;
+}
+
+async function onFotoPriaChange(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  form.fotoPriaFile = file;
+  form.fotoPria = await fileToBase64(file);
+}
+
+async function onFotoWanitaChange(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  form.fotoWanitaFile = file;
+  form.fotoWanita = await fileToBase64(file);
+}
+
+async function onQrisChange(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  form.eAngpaoQrisFile = file;
+  form.eAngpaoQris = await fileToBase64(file);
 }
 
 function fileToBase64(file) {
@@ -309,6 +437,44 @@ function fileToBase64(file) {
     r.readAsDataURL(file);
   });
 }
+
+const getDocId = () => `wedding_${currentUser.value}`;
+
+const loadData = async () => {
+  if (!currentUser.value) return;
+  try {
+    const doc = await db.get(getDocId());
+    if (doc.data) Object.assign(form, doc.data);
+    selectedTemplateId.value = doc.templateId || 'classic';
+  } catch (err) {
+    if (err.status !== 404) console.warn('Wedding load error:', err);
+  }
+};
+
+const saveData = async () => {
+  if (!currentUser.value) return;
+  saving.value = true;
+  try {
+    let doc;
+    try {
+      doc = await db.get(getDocId());
+    } catch (e) {
+      doc = { _id: getDocId(), type: 'wedding_data', owner: currentUser.value };
+    }
+    // Don't save File objects to PouchDB
+    const { latarLaguFile, galleryFiles, fotoPriaFile, fotoWanitaFile, eAngpaoQrisFile, ...dataToSave } = form;
+    doc.data = JSON.parse(JSON.stringify(dataToSave));
+    doc.templateId = selectedTemplateId.value;
+    doc.updatedAt = new Date().toISOString();
+    await db.put(doc);
+    showToast('Progress berhasil disimpan ke database!');
+  } catch (err) {
+    console.error('Save wedding error:', err);
+    showToast('Gagal menyimpan.', 'error');
+  } finally {
+    saving.value = false;
+  }
+};
 
 const router = useRouter();
 const carouselRef = ref(null);
@@ -321,31 +487,28 @@ function scrollCarousel(dir) {
 }
 
 async function goPreview() {
+  await saveData(); // Save before preview to ensure sync
   const payload = {
     ...form,
     templateId: selectedTemplateId.value,
     theme: selectedTemplateId.value === 'montain' ? 'teal' : 'gold',
     namaMempelaiPriaShort: (form.namaMempelaiPria || '').split(' ')[0],
     namaMempelaiWanitaShort: (form.namaMempelaiWanita || '').split(' ')[0],
-    // Map existing form fields to ClassicTemplate expects
-    latarLaguFileName: form.latarLaguFile?.name ?? null,
-    galleryCount: form.galleryFiles.length,
+    qrisFileUrl: form.eAngpaoQris,
+    latarLaguFileName: form.latarLaguFile?.name ?? 'Musik Latar',
+    galleryCount: form.gallery.length,
   };
-
-  if (form.fotoPriaFile) {
-    try { payload.fotoPria = await fileToBase64(form.fotoPriaFile); } catch (_) {}
-  }
-  if (form.fotoWanitaFile) {
-    try { payload.fotoWanita = await fileToBase64(form.fotoWanitaFile); } catch (_) {}
-  }
-  if (form.eAngpaoQrisFile) {
-    try { payload.qrisFileUrl = await fileToBase64(form.eAngpaoQrisFile); } catch (_) {}
-  }
 
   sessionStorage.setItem('weddingInvitationPreview', JSON.stringify(payload));
   const previewPath = selectedTemplateId.value === 'montain' ? '/wedding-invitation/preview-montain' : '/wedding-invitation/preview-classic';
   router.push(previewPath);
 }
+
+onMounted(() => {
+  if (currentUser.value) loadData();
+  syncModule(db, WEDDING_DB_NAME);
+  syncModule(userDb, WEDDING_USERS_DB_NAME);
+});
 </script>
 
 <style scoped>
@@ -801,5 +964,93 @@ async function goPreview() {
   pointer-events: none;
   filter: grayscale(1);
   box-shadow: none;
+}
+
+/* Auth Screen */
+.auth-screen {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  padding: 1rem;
+}
+
+.auth-card {
+  background: #fff;
+  padding: 2.5rem 2rem;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 380px;
+  text-align: center;
+  border: 1px solid #eee;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+}
+
+.auth-icon-wrapper {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.auth-card h2 { margin: 0 0 0.5rem; font-size: 1.5rem; color: #4a3f35; }
+.auth-card p { color: #8c7e6d; font-size: 0.9rem; margin-bottom: 2rem; }
+
+.auth-input {
+  width: 100%;
+  background: #fdfaf7;
+  border: 1px solid #eee;
+  color: #4a3f35;
+  padding: 0.85rem;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
+  outline: none;
+}
+
+.auth-input:focus { border-color: #7d6b52; }
+
+.btn-auth {
+  width: 100%;
+  background: #7d6b52;
+  color: #fff;
+  border: none;
+  padding: 0.85rem;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  font-size: 1rem;
+}
+
+.btn-toggle-auth {
+  background: transparent;
+  border: none;
+  color: #8c7e6d;
+  padding: 0.65rem;
+  margin-top: 1rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  text-decoration: underline;
+}
+
+.user-meta-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #fff;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid #eee;
+  font-size: 0.9rem;
+}
+
+.btn-logout {
+  background: rgba(239, 68, 68, 0.05);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.1);
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 </style>

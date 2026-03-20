@@ -40,7 +40,7 @@ export default defineConfig({
     vue(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'robots.txt', 'icons/icon.svg'],
+      includeAssets: ['favicon.ico', 'robots.txt', 'icon.png'],
       manifest: {
         name: 'PWASupperApps',
         short_name: 'PWASupperApps',
@@ -53,8 +53,9 @@ export default defineConfig({
         start_url: '/',
         id: '/',
         icons: [
-          { src: 'icons/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' },
-          { src: 'icons/icon.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'maskable' },
+          { src: 'icon.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'icon.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: 'icon.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
         categories: ['productivity', 'utilities'],
       },

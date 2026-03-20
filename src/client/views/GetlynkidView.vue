@@ -3,7 +3,7 @@
     <Teleport to="#app-header-portal">
       <div class="getlynkid-header-inner">
         <h1 class="header-title">getlynk.id</h1>
-        <div class="header-actions">
+        <div v-if="currentUser" class="header-actions">
           <button @click="saveData" class="btn btn-primary btn-save" :disabled="saving">
             {{ saving ? 'Menyimpan...' : 'Simpan Perubahan' }}
           </button>
@@ -11,9 +11,34 @@
       </div>
     </Teleport>
 
-    <div class="getlynkid-layout">
+    <div v-if="!currentUser" class="auth-screen">
+      <div class="auth-card">
+        <div class="auth-icon-wrapper">🔗</div>
+        <h2>getlynk.id</h2>
+        <p>{{ isRegisterMode ? 'Daftar akun baru' : 'Masuk ke editor Anda' }}</p>
+        
+        <div class="auth-form">
+          <input v-model="authForm.username" type="text" placeholder="Username..." class="auth-input" />
+          <input v-model="authForm.password" type="password" placeholder="Password..." class="auth-input" />
+          
+          <button @click="handleAuth" class="btn-auth" :disabled="authLoading">
+            {{ isRegisterMode ? 'Daftar' : 'Masuk' }}
+          </button>
+          
+          <button @click="isRegisterMode = !isRegisterMode" class="btn-toggle-auth">
+            {{ isRegisterMode ? 'Sudah punya akun? Masuk' : 'Belum punya akun? Daftar' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div v-else class="getlynkid-layout">
       <!-- Kiri: Konten (70% Desktop) -->
       <section class="editor-section">
+        <div class="user-meta-bar">
+          <span>Login sebagai: <strong>@{{ currentUser }}</strong></span>
+          <button @click="logout" class="btn-logout">Logout</button>
+        </div>
         <div class="editor-card">
           <div class="editor-header">
             <h2>Editor Konten</h2>
@@ -21,6 +46,7 @@
               + Tambah Blok Baru
             </button>
           </div>
+          <!-- Rest of the code... -->
 
           <div v-if="blocks.length === 0" class="empty-state">
             <p>Belum ada blok. Klik tombol di atas untuk menambah konten.</p>
@@ -164,11 +190,67 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, reactive } from 'vue';
+import PouchDB from 'pouchdb-browser';
+import { GETLYNK_DB_NAME, GETLYNK_USERS_DB_NAME, syncModule } from '../db.js';
+import { showToast } from '../toast.js';
+
+const db = new PouchDB(GETLYNK_DB_NAME);
+const userDb = new PouchDB(GETLYNK_USERS_DB_NAME);
+
+const currentUser = ref(localStorage.getItem('getlynkid_username') || null);
+const isRegisterMode = ref(false);
+const authLoading = ref(false);
+const authForm = reactive({ username: '', password: '' });
 
 const blocks = ref([]);
 const showAddModal = ref(false);
 const saving = ref(false);
+
+const handleAuth = async () => {
+  const { username, password } = authForm;
+  if (!username.trim() || !password.trim()) return;
+  authLoading.value = true;
+  try {
+    if (isRegisterMode.value) {
+      try {
+        await userDb.get(username);
+        showToast('Username sudah terpakai.', 'error');
+      } catch (err) {
+        if (err.status === 404) {
+          await userDb.put({ _id: username, password, createdAt: new Date().toISOString() });
+          showToast('Berhasil daftar! Silakan masuk.');
+          isRegisterMode.value = false;
+        } else throw err;
+      }
+    } else {
+      try {
+        const userDoc = await userDb.get(username);
+        if (userDoc.password === password) {
+          currentUser.value = username;
+          localStorage.setItem('getlynkid_username', username);
+          await loadData();
+        } else {
+          showToast('Password salah.', 'error');
+        }
+      } catch (err) {
+        if (err.status === 404) showToast('User tidak ditemukan.', 'error');
+        else throw err;
+      }
+    }
+  } catch (err) {
+    console.error('Auth error:', err);
+    showToast('Gagal autentikasi.', 'error');
+  } finally {
+    authLoading.value = false;
+  }
+};
+
+const logout = () => {
+  currentUser.value = null;
+  localStorage.removeItem('getlynkid_username');
+  blocks.value = [];
+};
 
 const addBlock = (type) => {
   const newBlock = {
@@ -210,21 +292,48 @@ const handleFileUpload = (event, block) => {
   reader.readAsDataURL(file);
 };
 
-const saveData = async () => {
-  saving.value = true;
-  // Simulasi simpan data
-  await new Promise(r => setTimeout(r, 1000));
-  saving.value = false;
-  alert('Perubahan berhasil disimpan!');
+const getDocId = () => `config_${currentUser.value}`;
+
+const loadData = async () => {
+  if (!currentUser.value) return;
+  try {
+    const doc = await db.get(getDocId());
+    blocks.value = doc.blocks || [];
+  } catch (err) {
+    if (err.status !== 404) console.warn('Load Getlynk data error:', err);
+    blocks.value = [
+      { id: '1', type: 'text', value: 'Selamat datang di link saya!' },
+      { id: '2', type: 'link', label: 'Follow Instagram', url: 'https://instagram.com' },
+    ];
+  }
 };
 
-// Load data initial (jika ada)
+const saveData = async () => {
+  if (!currentUser.value) return;
+  saving.value = true;
+  try {
+    let doc;
+    try {
+      doc = await db.get(getDocId());
+    } catch (e) {
+      doc = { _id: getDocId(), type: 'getlynkid_config', owner: currentUser.value };
+    }
+    doc.blocks = JSON.parse(JSON.stringify(blocks.value));
+    doc.updatedAt = new Date().toISOString();
+    await db.put(doc);
+    showToast('Perubahan berhasil disimpan!');
+  } catch (err) {
+    console.error('Save error:', err);
+    showToast('Gagal menyimpan perubahan.', 'error');
+  } finally {
+    saving.value = false;
+  }
+};
+
 onMounted(() => {
-  // Mock data
-  blocks.value = [
-    { id: '1', type: 'text', value: 'Selamat datang di link saya!' },
-    { id: '2', type: 'link', label: 'Follow Instagram', url: 'https://instagram.com' },
-  ];
+  if (currentUser.value) loadData();
+  syncModule(db, GETLYNK_DB_NAME);
+  syncModule(userDb, GETLYNK_USERS_DB_NAME);
 });
 </script>
 
@@ -243,6 +352,96 @@ onMounted(() => {
 .btn-save {
   padding: 0.4rem 0.8rem !important;
   font-size: 0.85rem !important;
+}
+
+/* Auth Screen */
+.auth-screen {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  padding: 1rem;
+}
+
+.auth-card {
+  background: #1e293b;
+  padding: 2.5rem 2rem;
+  border-radius: 20px;
+  width: 100%;
+  max-width: 380px;
+  text-align: center;
+  border: 1px solid #334155;
+  box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+}
+
+.auth-icon-wrapper {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.auth-card h2 { margin: 0 0 0.5rem; font-size: 1.5rem; color: #fff; }
+.auth-card p { color: #94a3b8; font-size: 0.9rem; margin-bottom: 2rem; }
+
+.auth-input {
+  width: 100%;
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #fff;
+  padding: 0.85rem;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  font-size: 0.95rem;
+  outline: none;
+}
+
+.auth-input:focus { border-color: #25D366; }
+
+.btn-auth {
+  width: 100%;
+  background: #25D366;
+  color: #fff;
+  border: none;
+  padding: 0.85rem;
+  border-radius: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  font-size: 1rem;
+}
+
+.btn-toggle-auth {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  padding: 0.65rem;
+  margin-top: 1rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  text-decoration: underline;
+}
+
+.user-meta-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #1e293b;
+  padding: 0.75rem 1.25rem;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  border: 1px solid #334155;
+  font-size: 0.9rem;
+}
+
+.btn-logout {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .getlynkid-layout {

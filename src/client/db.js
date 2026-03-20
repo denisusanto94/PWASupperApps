@@ -1,6 +1,13 @@
 import PouchDB from 'pouchdb-browser';
 
-const DB_NAME = 'wa_database';
+const DB_NAME = import.meta.env.VITE_DB_NAME || 'wa_database';
+export const CHAT_DB_NAME = 'chat_messages';
+export const CHAT_USERS_DB_NAME = 'chat_users';
+export const GETLYNK_DB_NAME = 'getlynkid_data';
+export const GETLYNK_USERS_DB_NAME = 'getlynkid_users';
+export const WEDDING_DB_NAME = 'wedding_invitation';
+export const WEDDING_USERS_DB_NAME = 'wedding_users';
+
 const REMOTE = `/db/${DB_NAME}`;
 console.log('PouchDB Sync Target:', REMOTE);
 
@@ -19,6 +26,17 @@ export function startSync() {
     retry: true,
   });
   return syncHandler;
+}
+
+/**
+ * Generic sync helper for any DB name
+ */
+export function syncModule(dbInstance, dbName) {
+  const remote = new PouchDB(`${location.origin}/db/${dbName}`);
+  return dbInstance.sync(remote, {
+    live: true,
+    retry: true,
+  });
 }
 
 /**

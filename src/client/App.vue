@@ -1,5 +1,11 @@
 <template>
   <div class="app-shell">
+    <Transition name="toast-slide">
+      <div v-if="toastState.show" class="global-toast" :class="toastState.type">
+        {{ toastState.message }}
+      </div>
+    </Transition>
+
     <header v-if="showBackHeader" class="app-header">
       <div class="app-header-container">
         <router-link to="/" class="back-link" aria-label="Kembali ke home">
@@ -17,6 +23,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
+import { toastState } from './toast.js';
 
 const route = useRoute();
 const showBackHeader = computed(() => {
@@ -53,6 +60,33 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+.global-toast {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  padding: 0.85rem 1.5rem;
+  text-align: center;
+  font-weight: 600;
+  color: #fff;
+  font-size: 0.95rem;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.global-toast.success { background: #00a884; }
+.global-toast.error { background: #ef4444; }
+.global-toast.info { background: #3b82f6; }
+.global-toast.warning { background: #f59e0b; }
+
+.toast-slide-enter-active, .toast-slide-leave-active {
+  transition: transform 0.35s ease, opacity 0.35s ease;
+}
+.toast-slide-enter-from, .toast-slide-leave-to {
+  transform: translateY(-100%);
+  opacity: 0;
 }
 
 .app-header {
@@ -108,7 +142,6 @@ body {
   font-weight: bold;
 }
 
-/* Common Header Styles for Teleported Content */
 .getlynkid-header-inner {
   display: flex;
   align-items: center;
@@ -121,11 +154,6 @@ body {
   font-size: 1.15rem;
   font-weight: 700;
   color: #25D366;
-}
-
-.header-tagline {
-  font-size: 0.75rem;
-  color: var(--muted);
 }
 
 .app-main {

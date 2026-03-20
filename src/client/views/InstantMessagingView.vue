@@ -20,22 +20,28 @@
       <div class="login-card">
         <div class="login-icon-wrapper">💬</div>
         <h2>Akses Chat</h2>
-        <p>Gunakan nama unik anda untuk mulai bercakap-cakap.</p>
+        <p>{{ isRegisterMode ? 'Daftar akun chat baru' : 'Masuk menggunakan akun Anda' }}</p>
         <div class="login-form">
           <input 
             v-model="usernameInput" 
-            @keyup.enter="login" 
             type="text" 
             placeholder="Username..." 
             class="login-input"
             autofocus
           />
-          <button @click="login" class="btn-login" :disabled="!usernameInput.trim()">
-            Mulai Percakapan
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          <input 
+            v-model="passwordInput" 
+            @keyup.enter="handleAuth" 
+            type="password" 
+            placeholder="Password..." 
+            class="login-input"
+          />
+          <button @click="handleAuth" class="btn-login" :disabled="!usernameInput.trim() || !passwordInput.trim() || authLoading">
+            {{ isRegisterMode ? 'Daftar & Masuk' : 'Masuk' }}
           </button>
-          <button @click="clearAllData" class="btn-clear-data">
-            Hapus Seluruh Data Chat
+          
+          <button @click="isRegisterMode = !isRegisterMode" class="btn-toggle-auth">
+            {{ isRegisterMode ? 'Sudah punya akun? Masuk' : 'Belum punya akun? Daftar' }}
           </button>
         </div>
         <div class="login-footer">AES-256 SECURED</div>
@@ -227,16 +233,21 @@
 <script setup>
 import { ref, onMounted, computed, nextTick, watch } from 'vue';
 import PouchDB from 'pouchdb-browser';
+import { CHAT_DB_NAME, CHAT_USERS_DB_NAME, syncModule } from '../db.js';
+import { showToast } from '../toast.js';
 
 // DB Config
-const db = new PouchDB('chat_messages');
-const remoteDb = new PouchDB(`${location.origin}/db/chat_messages`);
+const db = new PouchDB(CHAT_DB_NAME);
+const userDb = new PouchDB(CHAT_USERS_DB_NAME);
 
 // State
 const currentUser = ref(localStorage.getItem('chat_username') || null);
 const isLoggedIn = computed(() => !!currentUser.value);
 const isSyncing = ref(false);
 const usernameInput = ref('');
+const passwordInput = ref('');
+const isRegisterMode = ref(false);
+const authLoading = ref(false);
 const selectedContact = ref(null);
 const messages = ref([]);
 const newMessage = ref('');
@@ -296,11 +307,45 @@ const formatTimeShort = (ts) => {
 
 const isSameUser = (msg, prev) => prev && msg.from === prev.from && (msg.timestamp - prev.timestamp < 120000);
 
-const login = () => {
-  if (!usernameInput.value.trim()) return;
-  currentUser.value = usernameInput.value.trim();
-  localStorage.setItem('chat_username', currentUser.value);
-  initApp();
+const handleAuth = async () => {
+  const username = usernameInput.value.trim();
+  const password = passwordInput.value.trim();
+  if (!username || !password) return;
+  
+  authLoading.value = true;
+  try {
+    if (isRegisterMode.value) {
+      try {
+        await userDb.get(username);
+        showToast('Username sudah dipakai, silakan gunakan username lain atau login.', 'error');
+      } catch (err) {
+        if (err.status === 404) {
+          await userDb.put({ _id: username, password, createdAt: new Date().toISOString() });
+          showToast('Pendaftaran berhasil! Silakan masuk.');
+          isRegisterMode.value = false;
+        } else throw err;
+      }
+    } else {
+      try {
+        const user = await userDb.get(username);
+        if (user.password === password) {
+          currentUser.value = username;
+          localStorage.setItem('chat_username', username);
+          initApp();
+        } else {
+          showToast('Password salah.', 'error');
+        }
+      } catch (err) {
+        if (err.status === 404) showToast('User tidak ditemukan.', 'error');
+        else throw err;
+      }
+    }
+  } catch (err) {
+    console.error('Auth error:', err);
+    showToast('Gagal autentikasi.', 'error');
+  } finally {
+    authLoading.value = false;
+  }
 };
 
 const logout = () => { currentUser.value = null; localStorage.removeItem('chat_username'); selectedContact.value = null; };
@@ -310,10 +355,8 @@ const scrollToBottom = (behavior = 'smooth') => {
 };
 
 const startSync = () => {
-  db.sync(remoteDb, { live: true, retry: true })
-    .on('active', () => isSyncing.value = true)
-    .on('paused', () => isSyncing.value = false)
-    .on('change', () => { refreshUI(); });
+  syncModule(db, CHAT_DB_NAME);
+  syncModule(userDb, CHAT_USERS_DB_NAME);
   
   db.changes({ live: true, since: 'now', include_docs: true }).on('change', () => { refreshUI(); });
 };
@@ -414,11 +457,11 @@ const clearAllData = async () => {
         localStorage.removeItem('chat_username');
         location.reload();
       } catch (err) {
-        alert('Gagal menghapus data: ' + err.message);
+        showToast('Gagal menghapus data: ' + err.message, 'error');
       }
     }
   } else if (pwd !== null) {
-    alert('Password Salah!');
+    showToast('Password Salah!', 'error');
   }
 };
 
@@ -442,6 +485,7 @@ onMounted(() => { if (isLoggedIn.value) initApp(); });
 .btn-login { width: 100%; background: #00a884; color: #fff; border: none; padding: 0.75rem; border-radius: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
 .btn-clear-data { width: 100%; background: transparent; border: 1px solid rgba(234, 67, 53, 0.3); color: #ea4335; padding: 0.65rem; border-radius: 10px; font-weight: 600; font-size: 0.75rem; margin-top: 0.75rem; cursor: pointer; transition: all 0.2s; }
 .btn-clear-data:hover { background: rgba(234, 67, 53, 0.1); border-color: #ea4335; }
+.btn-toggle-auth { background: transparent; border: none; color: #8696a0; padding: 0.65rem; margin-top: 0.25rem; cursor: pointer; font-size: 0.75rem; text-decoration: underline; width: 100%; }
 .login-footer { margin-top: 1.5rem; font-size: 0.6rem; color: #667781; letter-spacing: 0.1em; }
 
 /* Main */
