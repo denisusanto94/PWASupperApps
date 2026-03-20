@@ -97,6 +97,35 @@ npm start
 3.  Untuk **Instant Messaging**: Masukkan username pertama kali, cari teman bicara, dan mulai chat terenkripsi.
 4.  Untuk **Wedding Invitation**: Telusuri template melalui carousel, pilih, dan pratinjau desain undangan.
 
+## 🔗 Sinkronisasi & Deployment Database
+
+Aplikasi ini menggunakan model **Offline-First**. Data disimpan di browser lokal via PouchDB dan disinkronkan ke server secara real-time.
+
+### 1. Metode Sinkronisasi Default
+Secara default, aplikasi ini sudah memiliki server PouchDB terintegrasi (`express-pouchdb`) yang menyimpan data ke folder `/database` (Format LevelDB). Anda hanya perlu menjalankan aplikasi ini di server (VPS) menggunakan **PM2**:
+```bash
+npm install pm2 -g
+pm2 start index.js --name pwa-super-apps
+```
+
+### 2. Menggunakan Database Lain (MySQL, PostgreSQL, MongoDB, dll)
+PouchDB di sisi server dapat dikonfigurasi untuk menyimpan data ke database Relational atau NoSQL lain menggunakan **Adapters**. Hal ini memungkinkan data chat/WabBlaster tersimpan di tabel database pilihan Anda:
+
+*   **MySQL & PostgreSQL**:
+    *   Gunakan library `pouchdb-adapter-mysql` atau `pouchdb-adapter-postgresql`.
+    *   Konfigurasi pada `index.js` untuk menggantikan adapter default (LevelDB).
+*   **MongoDB**:
+    *   Gunakan `pouchdb-adapter-mongodb` untuk performa skala besar.
+*   **Oracle/Cloud SQL**:
+    *   Mendukung koneksi via adapter SQL standar atau API CouchDB-compatible.
+
+> **Penting**: Sinkronisasi antar user tetap akan menggunakan protokol CouchDB melalui API yang disediakan oleh server ini, apa pun jenis database (MySQL/Mongo) yang digunakan di belakangnya.
+
+### 3. Konfigurasi Hosting (VPS/Cloud)
+1.  **CORS**: Pastikan CORS diaktifkan di server agar domain frontend dapat mengakses API database.
+2.  **HTTPS**: Wajib menggunakan SSL/HTTPS untuk mendukung fitur enkripsi AES-256 dan akses PWA di browser.
+3.  **Reverse Proxy**: Gunakan Nginx atau Apache untuk mengarahkan port `3000` ke domain publik Anda.
+
 ## 📱 PWA – Instalasi di Perangkat
 
 Aplikasi ini mendukung fitur PWA sepenuhnya:
