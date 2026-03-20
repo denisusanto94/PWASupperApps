@@ -97,34 +97,97 @@ npm start
 3.  Untuk **Instant Messaging**: Masukkan username pertama kali, cari teman bicara, dan mulai chat terenkripsi.
 4.  Untuk **Wedding Invitation**: Telusuri template melalui carousel, pilih, dan pratinjau desain undangan.
 
-## 🔗 Sinkronisasi & Deployment Database
+## 🛠️ Tutorial Lengkap: Deployment & Sinkronisasi Server
 
-Aplikasi ini menggunakan model **Offline-First**. Data disimpan di browser lokal via PouchDB dan disinkronkan ke server secara real-time.
+Ikuti langkah-langkah di bawah ini untuk memindahkan aplikasi dari lokal ke server produksi (VPS).
 
-### 1. Metode Sinkronisasi Default
-Secara default, aplikasi ini sudah memiliki server PouchDB terintegrasi (`express-pouchdb`) yang menyimpan data ke folder `/database` (Format LevelDB). Anda hanya perlu menjalankan aplikasi ini di server (VPS) menggunakan **PM2**:
+### Bagian 1: Persiapan Server (VPS)
+Gunakan VPS dengan OS Ubuntu 20.04/22.04. Login via SSH dan jalankan:
 ```bash
-npm install pm2 -g
-pm2 start index.js --name pwa-super-apps
+# Update sistem
+sudo apt update && sudo apt upgrade -y
+
+# Instal Node.js (v18+) & Git
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt install -y nodejs git
 ```
 
-### 2. Menggunakan Database Lain (MySQL, PostgreSQL, MongoDB, dll)
-PouchDB di sisi server dapat dikonfigurasi untuk menyimpan data ke database Relational atau NoSQL lain menggunakan **Adapters**. Hal ini memungkinkan data chat/WabBlaster tersimpan di tabel database pilihan Anda:
+### Bagian 2: Deploy Aplikasi (Frontend & Backend)
+1. **Clone project ke server**:
+   ```bash
+   git clone https://github.com/denisusanto94/PWASupperApps.git
+   cd PWASupperApps
+   ```
+2. **Instal dependensi & Build**:
+   ```bash
+   npm install
+   npm run build  # Menghasilkan folder /dist
+   ```
+3. **Jalankan aplikasi dengan PM2** (agar tetap hidup 24/7):
+   ```bash
+   sudo npm install pm2 -g
+   pm2 start index.js --name pwa-super-apps
+   pm2 save
+   pm2 startup
+   ```
 
-*   **MySQL & PostgreSQL**:
-    *   Gunakan library `pouchdb-adapter-mysql` atau `pouchdb-adapter-postgresql`.
-    *   Konfigurasi pada `index.js` untuk menggantikan adapter default (LevelDB).
-*   **MongoDB**:
-    *   Gunakan `pouchdb-adapter-mongodb` untuk performa skala besar.
-*   **Oracle/Cloud SQL**:
-    *   Mendukung koneksi via adapter SQL standar atau API CouchDB-compatible.
+### Bagian 3: Konfigurasi CouchDB (Opsional untuk Skala Besar)
+Jika Anda ingin menggunakan database CouchDB native sebagai pusat sinkronisasi:
 
-> **Penting**: Sinkronisasi antar user tetap akan menggunakan protokol CouchDB melalui API yang disediakan oleh server ini, apa pun jenis database (MySQL/Mongo) yang digunakan di belakangnya.
+1. **Instal CouchDB**:
+   ```bash
+   sudo apt install -y couchdb
+   ```
+   *Pilih mode 'standalone' dan set password admin saat instalasi.*
 
-### 3. Konfigurasi Hosting (VPS/Cloud)
-1.  **CORS**: Pastikan CORS diaktifkan di server agar domain frontend dapat mengakses API database.
-2.  **HTTPS**: Wajib menggunakan SSL/HTTPS untuk mendukung fitur enkripsi AES-256 dan akses PWA di browser.
-3.  **Reverse Proxy**: Gunakan Nginx atau Apache untuk mengarahkan port `3000` ke domain publik Anda.
+2. **Penting: Konfigurasi CORS** (agar browser bisa akses):
+   Buka dashboard CouchDB (Fauxton) di `http://IP-SERVER:5984/_utils` atau edit `local.ini`:
+   ```ini
+   [httpd]
+   enable_cors = true
+
+   [cors]
+   origins = *
+   methods = GET, POST, PUT, DELETE, OPTIONS
+   credentials = true
+   ```
+
+3. **Ganti URL Database di Frontend**:
+   Buka file `src/client/db.js` dan ubah konstanta `remoteDb`:
+   ```javascript
+   const remoteDb = new PouchDB('https://user:pass@domain-anda.com/db_name');
+   ```
+
+### Bagian 4: Pengaturan Domain & SSL (Nginx)
+Aplikasi PWA & Enkripsi AES-256 **WAJIB menggunakan HTTPS**.
+
+1. **Instal Nginx**:
+   ```bash
+   sudo apt install nginx
+   ```
+2. **Konfigurasi Reverse Proxy**:
+   Buat file `/etc/nginx/sites-available/pwasupperapps`:
+   ```nginx
+   server {
+       server_name domain-anda.com;
+       location / {
+           proxy_pass http://localhost:3000;
+           proxy_http_version 1.1;
+           proxy_set_header Upgrade $http_upgrade;
+           proxy_set_header Connection 'upgrade';
+           proxy_set_header Host $host;
+           proxy_cache_bypass $http_upgrade;
+       }
+   }
+   ```
+3. **Pasang SSL (Certbot)**:
+   ```bash
+   sudo apt install certbot python3-certbot-nginx
+   sudo certbot --nginx -d domain-anda.com
+   ```
+
+---
+**Catatan**: Seluruh data yang mengalir antar perangkat akan otomatis ter-sinkronisasi melalui API server yang telah Anda pasang di atas.
 
 ## 📱 PWA – Instalasi di Perangkat
 
