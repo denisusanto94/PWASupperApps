@@ -1,0 +1,16 @@
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  
+  # Jangan arahkan jika file atau direktori fisik ada (misal assets, icons)
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Pengecualian untuk endpoint database dan API agar bisa dihandle oleh Node.js (jika pakai proxy)
+  RewriteRule ^db/ - [L]
+  RewriteRule ^api/ - [L]
+
+  # SPA Fallback: arahkan semua ke index.html (untuk rute seperti /dashboard, /about, dll)
+  RewriteRule ^ index.html [L]
+</IfModule>

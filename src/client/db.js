@@ -1,7 +1,8 @@
 import PouchDB from 'pouchdb-browser';
 
 const DB_NAME = 'wa_database';
-const REMOTE = `${location.origin}/db/${DB_NAME}`;
+const REMOTE = `/db/${DB_NAME}`;
+console.log('PouchDB Sync Target:', REMOTE);
 
 export const db = new PouchDB(DB_NAME);
 
