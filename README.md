@@ -132,7 +132,13 @@ sudo apt install -y nodejs git
    pm2 startup
    ```
 
-### Bagian 3: Konfigurasi CouchDB (Opsional untuk Skala Besar)
+### Bagian 3: Automatisasi Database (Auto-Migration)
+Server kini dilengkapi dengan fitur **Auto-Migration** yang akan mendeteksi dan membuat **Mango Indexes** serta skema awal secara otomatis setiap kali aplikasi dijalankan (`npm start`). Hal ini memastikan:
+*   Pencarian pesan chat dan history WABlaster lebih cepat melalui indexing otomatis.
+*   Struktur data (schema) yang konsisten di semua lingkungan.
+*   Seeding data awal untuk pengaturan default aplikasi.
+
+### Bagian 4: Konfigurasi CouchDB (Opsional untuk Skala Besar)
 Jika Anda ingin menggunakan database CouchDB native sebagai pusat sinkronisasi:
 
 1. **Instal CouchDB**:
@@ -141,11 +147,7 @@ Jika Anda ingin menggunakan database CouchDB native sebagai pusat sinkronisasi:
    ```
    *Pilih mode 'standalone' dan set password admin saat instalasi.*
 
-2. **Penting: Konfigurasi CORS** (agar browser bisa akses):### 3. Automatisasi Database (Auto-Migration)
-Server kini dilengkapi dengan fitur **Auto-Migration** yang akan mendeteksi dan membuat **Mango Indexes** serta skema awal secara otomatis setiap kali aplikasi dijalankan (`npm start`). Hal ini memastikan:
-*   Pencarian pesan chat dan history WABlaster lebih cepat melalui indexing otomatis.
-*   Struktur data (schema) yang konsisten di semua lingkungan.
-*   Seeding data awal untuk pengaturan default aplikasi.
+2. **Penting: Konfigurasi CORS** (agar browser bisa akses):
    Buka dashboard CouchDB (Fauxton) di `http://IP-SERVER:5984/_utils` atau edit `local.ini`:
    ```ini
    [httpd]
@@ -158,12 +160,39 @@ Server kini dilengkapi dengan fitur **Auto-Migration** yang akan mendeteksi dan 
    ```
 
 3. **Ganti URL Database di Frontend**:
-   Buka file `src/client/db.js` dan ubah konstanta `remoteDb`:
+   Buka file `src/client/db.js` und ubah konstanta `remoteDb`:
    ```javascript
    const remoteDb = new PouchDB('https://user:pass@domain-anda.com/db_name');
    ```
 
-### Bagian 4: Pengaturan Domain & SSL (Nginx)
+### Bagian 5: Sinkronisasi dengan Database Lain (MySQL, Oracle, MongoDB, Postgres, SQL Server)
+Jika Anda membutuhkan integrasi data dengan sistem database eksternal:
+
+#### 1. MySQL & PostgreSQL (Relational)
+*   **Instalasi**: `sudo apt install mysql-server postgresql -y`
+*   **Langkah**: Gunakan adapter `pouchdb-adapter-mysql` atau `pouchdb-adapter-postgresql`.
+*   **Konfigurasi**:
+    ```javascript
+    import MySqlAdapter from 'pouchdb-adapter-mysql';
+    PouchDB.plugin(MySqlAdapter);
+    const db = new PouchDB('mysql://user:pass@localhost:3306/db_name', {adapter: 'mysql'});
+    ```
+
+#### 2. MongoDB (NoSQL)
+*   **Instalasi**: `sudo apt install mongodb -y`
+*   **Langkah**: Gunakan `pouchdb-adapter-mongodb`. Sangat efisien untuk menyimpan dokumen JSON dalam skala besar.
+
+#### 3. Oracle & SQL Server (Enterprise)
+*   **Metode Bridge**: Gunakan **Changes Listener** pada Node.js untuk memantau setiap perubahan dokumen dan melakukan sinkronisasi ke tabel SQL.
+*   **Contoh Implementasi**:
+    ```javascript
+    db.changes({ live: true, include_docs: true }).on('change', async (change) => {
+      // Gunakan library 'oracledb' atau 'mssql' untuk melakukan UPSERT
+      console.log(`Menyinkronkan dok ${change.id} ke database Enterprise...`);
+    });
+    ```
+
+### Bagian 6: Pengaturan Domain & SSL (Nginx)
 Aplikasi PWA & Enkripsi AES-256 **WAJIB menggunakan HTTPS**.
 
 1. **Instal Nginx**:
