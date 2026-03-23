@@ -22,7 +22,14 @@ const CONNECTION_DOC_ID = 'connection';
 export async function startBaileys(db) {
   ensureSessionsDir();
   const { state, saveCreds } = await useMultiFileAuthState(SESSIONS_DIR);
-  const { version } = await fetchLatestBaileysVersion();
+  let version;
+  try {
+    const v = await fetchLatestBaileysVersion();
+    version = v.version;
+  } catch (err) {
+    console.error('⚠️ Gagal mengambil versi Baileys terbaru, menggunakan default:', err.message);
+    version = [2, 3000, 1015901307]; // Fallback version
+  }
 
   const sock = makeWASocket({
     version,
@@ -45,17 +52,42 @@ export async function startBaileys(db) {
           if (e.status !== 404) throw e;
           doc = { _id: CONNECTION_DOC_ID };
         }
-        await db.put({
-          ...doc,
-          ...update,
-          updatedAt: new Date().toISOString(),
-        });
+
+        // --- Pencegahan Overwrite Status Lebih Tinggi oleh Status Lebih Rendah (Race Condition) ---
+        // Hirarki status: connected > qr > connecting
+        const rank = { 'connected': 3, 'qr': 2, 'connecting': 1, 'disconnected': 0 };
+        const currentRank = rank[doc.status || 'disconnected'] || 0;
+        const updateRank = rank[update.status] || 0;
+        
+        // Jangan biarkan 'connecting' menimpa status yang sudah 'qr' atau 'connected'
+        if (update.status === 'connecting' && currentRank >= 2) {
+           success = true; // Anggap saja berhasil, tapi tidak menimpa
+           break;
+        }
+
+        // --- Properti yang harus dibersihkan per status agar tidak "stale" ---
+        const nextDoc = { ...doc, ...update };
+        nextDoc.updatedAt = new Date().toISOString();
+
+        if (update.status === 'connecting') {
+          nextDoc.qr = undefined;
+          nextDoc.qrAttemptsEnded = undefined;
+          nextDoc.reason = undefined;
+        } else if (update.status === 'qr') {
+          nextDoc.qrAttemptsEnded = undefined;
+          nextDoc.reason = undefined;
+        } else if (update.status === 'connected') {
+          nextDoc.qr = undefined;
+          nextDoc.qrAttemptsEnded = undefined;
+          nextDoc.reason = undefined;
+        } else if (update.status === 'disconnected') {
+          nextDoc.qr = undefined;
+        }
+
+        await db.put(nextDoc);
         success = true;
       } catch (err) {
-        if (err.status === 409) {
-          // Konflik revision, coba lagi (loop akan mendapa kan revision terbaru di iterasi berikutnya)
-          continue;
-        }
+        if (err.status === 409) continue;
         console.error('updateConnectionDoc error:', err);
         break;
       }

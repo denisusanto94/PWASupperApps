@@ -20,13 +20,20 @@ const mysqlHost = process.env.MYSQL_HOST === 'localhost' ? '127.0.0.1' : (proces
 
 async function startMysqlBridge() {
   if (!process.env.MYSQL_HOST) return;
-  const connection = await mysql.createConnection({
-    host: mysqlHost,
-    port: process.env.MYSQL_PORT || 3306,
-    user: process.env.MYSQL_USER,
-    password: process.env.MYSQL_PASS || '',
-    database: process.env.MYSQL_DB
-  });
+  let connection;
+  try {
+    connection = await mysql.createConnection({
+      host: mysqlHost,
+      port: process.env.MYSQL_PORT || 3306,
+      user: process.env.MYSQL_USER,
+      password: process.env.MYSQL_PASS || '',
+      database: process.env.MYSQL_DB
+    });
+  } catch (err) {
+    console.error('❌ Terjadi kesalahan saat menghubungkan ke MySQL:', err.message);
+    console.warn('⚠️ Sinkronisasi ke MySQL dinonaktifkan. Anda dapat terus menggunakan aplikasi.');
+    return;
+  }
 
   const dbsToSync = [
     process.env.DB_NAME || 'wa_database',
@@ -100,7 +107,7 @@ async function main() {
   
   await startBaileys(db);
   await startWorker(db);
-  await startMysqlBridge(); // Aktifkan sinkronisasi ke MySQL untuk semua modul
+  startMysqlBridge().catch(err => console.error('MySQL Bridge Startup Error:', err)); // Jangan blocking agar server utama tetap jalan
   app.listen(PORT, () => {
     console.log(`PWASupperApps berjalan di http://localhost:${PORT}`);
   });
