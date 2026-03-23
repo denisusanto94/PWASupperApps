@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 PouchDB.plugin(PouchDBFind);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_NAMES = ['wa_database', 'chat_messages', 'chat_users', 'getlynkid_data', 'getlynkid_users', 'wedding_invitation', 'wedding_users'];
+const DB_NAMES = ['wa_database', 'chat_messages', 'chat_users', 'getlynkid_data', 'getlynkid_users', 'wedding_invitation', 'wedding_users', 'timestamp_camera'];
 
 export async function initDbMigrations(dbPath) {
   console.log('--- Memulai Inisialisasi Database (NoSQL Migration) ---');

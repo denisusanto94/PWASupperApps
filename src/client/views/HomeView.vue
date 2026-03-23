@@ -32,6 +32,13 @@
         </div>
         <span class="app-btn-title">Wedding Invitation</span>
       </router-link>
+
+      <router-link to="/timestamp-camera" class="app-btn">
+        <div class="app-btn-icon icon-absensi">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        </div>
+        <span class="app-btn-title">Timestamp Camera</span>
+      </router-link>
     </div>
   </div>
 </template>
@@ -114,6 +121,7 @@
 .icon-link { background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); }
 .icon-chat { background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); }
 .icon-wedding { background: linear-gradient(135deg, #e879f9 0%, #c026d3 100%); }
+.icon-absensi { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
 
 .app-btn-title {
   font-size: 0.9rem;

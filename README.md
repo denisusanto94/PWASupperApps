@@ -27,6 +27,14 @@ Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)
     *   **User Partitioning**: Progres pembuatan undangan disimpan berdasarkan akun pengguna.
     *   **Multi-Template**: Pilihan template (Classic, Montain, dll) yang responsif.
 
+5.  **Timestamp Camera (Absensi Online & Foto Lokasi)**:
+    *   Pengambilan foto dengan informasi lokasi (Map/Address) dan waktu (Timestamp) yang disematkan langsung pada gambar.
+    *   **Fixed Resolution**: Foto dihasilkan dalam ukuran **1080 x 1350 px** (Aspek rasio 4:5).
+    *   **Adaptive Overlay**: Informasi teks di dalam foto yang proporsional dan jelas.
+    *   **Smart Cropping**: Mengubah otomatis tangkapan kamera landscape menjadi portrait.
+    *   **Database Sync**: Data foto (Base64) dan metadata lokasi tersimpan aman di PouchDB & MySQL.
+
+
 ## ✨ Fitur Sistem & UX Modern
 
 *   **Hybrid Storage Bridge**: Sinkronisasi otomatis data PouchDB (NoSQL) ke **MySQL** secara real-time untuk kebutuhan reporting dan backup terpusat.

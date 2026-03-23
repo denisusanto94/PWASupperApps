@@ -7,6 +7,7 @@ export const GETLYNK_DB_NAME = 'getlynkid_data';
 export const GETLYNK_USERS_DB_NAME = 'getlynkid_users';
 export const WEDDING_DB_NAME = 'wedding_invitation';
 export const WEDDING_USERS_DB_NAME = 'wedding_users';
+export const TIMESTAMP_DB_NAME = 'timestamp_camera';
 
 const REMOTE = `/db/${DB_NAME}`;
 console.log('PouchDB Sync Target:', REMOTE);
@@ -151,3 +152,23 @@ export function onConnectionChange(callback) {
     .on('change', (ch) => callback(ch.doc))
     .on('error', (err) => console.error('connection changes error:', err));
 }
+
+/**
+ * Simpan hasil foto Timestamp Camera ke database.
+ * @param {Object} data 
+ */
+export async function saveTimestampCapture(data) {
+  const localDb = new PouchDB(TIMESTAMP_DB_NAME);
+  const doc = {
+    _id: `ts_${Date.now()}`,
+    type: 'timestamp_capture',
+    ...data,
+    createdAt: new Date().toISOString()
+  };
+  
+  // Sync as well
+  syncModule(localDb, TIMESTAMP_DB_NAME);
+  
+  return await localDb.put(doc);
+}
+

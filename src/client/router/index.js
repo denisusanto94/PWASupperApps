@@ -49,6 +49,12 @@ const routes = [
     component: () => import('../views/WeddingInvitationPreviewMontainView.vue'),
     meta: { title: 'Preview Undangan Montain' },
   },
+  {
+    path: '/timestamp-camera',
+    name: 'TimestampCamera',
+    component: () => import('../views/TimestampCameraView.vue'),
+    meta: { title: 'Timestamp Camera' },
+  },
 ];
 
 const router = createRouter({

@@ -42,7 +42,8 @@ async function startMysqlBridge() {
     'getlynkid_data',
     'getlynkid_users',
     'wedding_invitation',
-    'wedding_users'
+    'wedding_users',
+    'timestamp_camera'
   ];
 
   console.log(`🚀 MySQL Bridge Aktif: Mensinkronkan [${dbsToSync.join(', ')}] ke MySQL...`);
