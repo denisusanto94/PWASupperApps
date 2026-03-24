@@ -9,18 +9,19 @@ Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)
 1.  **WaBlaster (WhatsApp Blaster)**:
     *   Kirim pesan WhatsApp bulk dengan jeda acak untuk menghindari deteksi spam.
     *   Impor kontak dari file VCF.
-    *   Sinkronisasi riwayat pengiriman real-time.
+    *   Sinkronisasi riwayat pengiriman real-time & Integrasi Notifikasi Global (Toast).
 
 2.  **getlynk.id (Bio Link Tool) - [Auth Protected]**:
     *   Utilitas pemendekan tautan & Bio Link kustom.
     *   **Fitur Login & Registrasi**: Setiap pengguna memiliki editor dan data konten privat.
     *   Berbagai blok konten: Text, Image, Video, Link, Social Connect.
 
-3.  **Instant Messaging (Secure Chat) - [Auth Protected]**:
-    *   **Enkripsi E2EE**: Pesan dienkripsi ujung-ke-ujung via **AES-256-GCM**.
-    *   **Secure Access**: Memerlukan username & password untuk akses chat. 
-    *   **Media Sharing**: Support gambar, video, audio, dan dokumen.
-    *   **Real-time Sync**: Pesan tersinkronisasi antar perangkat secara instan.
+3.  **Instant Chat (Secure Communication) - [Auth Protected]**:
+    *   **Keamanan Vault**: Enkripsi identitas **AES-256 GCM** via PBKDF2 (Zero-Visibility Credentials).
+    *   **Real-time Voice & Video Call**: Panggilan suara dan video berkualitas tinggi berbasis **WebRTC** (Peer-to-Peer).
+    *   **Call History**: Pencatatan otomatis riwayat panggilan (Missed, Ended, Cancelled) di timeline chat.
+    *   **Media Sharing**: Support gambar, video, audio, dan dokumen terenkripsi.
+    *   **Indikator Online**: Status kehadiran real-time antar pengguna.
 
 4.  **Wedding Invitation (Undangan Digital) - [Auth Protected]**:
     *   Pembuat undangan pernikahan digital dengan template premium.
@@ -29,44 +30,45 @@ Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)
 
 5.  **Timestamp Camera (Absensi Online & Foto Lokasi)**:
     *   **Metode Ganda**: Pengambilan foto via kamera langsung (Selfie) atau unggah dari galeri (Upload).
-    *   **Resolusi Tinggi (Full HD Portrait)**: Foto dihasilkan dalam ukuran **1080 x 1920 px** (Aspek rasio 9:16).
-    *   **Overlay Presisi Tinggi**: Informasi Koordinat (S/N & E/W dengan 8 desimal), Alamat detail (No. Rumah s/d Provinsi), dan Waktu dengan detik.
-    *   **Kustomisasi Tipografi**: Slider pengaturan ukuran font overlay secara real-time (16px - 72px).
-    *   **Premium Viewfinder**: Antarmuka kamera modern dengan garis fokus dan entry animations.
-    *   **Database Sync**: Data foto (Base64) dan metadata lokasi tersimpan aman di PouchDB & MySQL.
+    *   **Resolusi Tinggi (Full HD Portrait)**: Foto dihasilkan dalam ukuran **1080 x 1920 px**.
+    *   **Overlay Presisi Tinggi**: Koordinat (8 desimal desimal), Alamat detail, dan Waktu (Detik).
+    *   **Premium Viewfinder**: Antarmuka modern dengan garis fokus dan entry animations.
 
+6.  **Real-time Insights (Plugins)**:
+    *   **Forecast BMKG**: Prakiraan cuaca resmi dari server BMKG Indonesia.
+    *   **Google News Feed**: Berita terkini harian yang terintegrasi di Dashboard.
 
 ## ✨ Fitur Sistem & UX Modern
 
-*   **Hybrid Storage Bridge**: Sinkronisasi otomatis data PouchDB (NoSQL) ke **MySQL** secara real-time untuk kebutuhan reporting dan backup terpusat.
-*   **Global Toast System**: Notifikasi cerdas (Success, Error, Warning) yang muncul secara *full-width* di bagian atas layar, menggantikan dialog alert tradisional.
-*   **Offline-First & PWA**: Akses data tetap lancar meskipun koneksi terputus, otomatis sinkron saat kembali online.
-*   **Branded Interface**: Favicon dan ikon aplikasi yang telah diperbarui untuk identitas visual yang seragam.
-*   **HTTPS Mandatory**: Fitur kamera dan enkripsi memerlukan koneksi aman (SSL) untuk berfungsi di browser perangkat mobile.
+*   **MySQL Full-Sync Initializer**: Pada saat startup, bridge akan melakukan sinkronisasi penuh (*Full docs sync*) dari PouchDB ke MySQL untuk memastikan seluruh data historis (chat, users, version) terbit ke backend SQL.
+*   **Credential Hardening**: Seluruh password di database dimigrasikan dari plain-text ke format enkripsi AES-256. (Gunakan `migrate_passwords.js` untuk mereset akun lama).
+*   **Global Toast Notification**: Notifikasi cerdas (Full-width top overlay) dengan prioritas `z-index: 10001` yang menjamin pesan sistem selalu terlihat di atas aset visual apa pun.
+*   **WebRTC Signaling via PouchDB**: Penggunaan NoSQL sebagai signaling server untuk panggilan peer-to-peer tanpa ketergantungan server pihak ketiga berbayar.
+*   **Idempotent Migrations**: Inisialisasi skema MySQL otomatis yang cerdas (Index checking & Field validation) setiap kali server dijalankan.
 
 ## 🛠️ Tech Stack
 
-*   **Frontend**: Vue 3 (Composition API), Tailwind CSS / Vanilla CSS, Vue Router.
+*   **Frontend**: Vue 3 (Composition API), Vite, Tailwind CSS / Vanilla Premium UI.
 *   **Backend**: Node.js, Express, Express-PouchDB.
-*   **Database**: PouchDB (Local/Server), MySQL (Sync Bridge via `mysql2`).
-*   **Security**: Web Crypto API (AES-256-GCM) & PouchDB-based Auth.
-*   **WhatsApp**: Baileys Socket Connectivity.
+*   **Database**: PouchDB (IndexedDB/LevelDB), MySQL (Persistence Bridge via Remote Server).
+*   **RTC & Security**: WebRTC (Signaling via PouchDB), Web Crypto API (AES-GCM 256), PBKDF2 (50.000 iterations).
+*   **WhatsApp**: Baileys WASocket Middleware.
 
 ## ⚙️ Cara Instalasi & Penggunaan
 
 ### 1. Persiapan Database MySQL
-Buatlah database baru di MySQL (misal: `pwa-super-apps`). Aplikasi akan otomatis membuat tabel `pwa_data` saat pertama kali dijalankan.
+Buatlah database baru di MySQL (misal: `pwa_super_apps`). Aplikasi akan otomatis membangun tabel `pwa_data`, `is_online_chat`, `users_chat`, dan `pwa_version` saat pertama kali dijalankan.
 
 ### 2. Konfigurasi Lingkungan (.env)
-Salin `.env.example` ke `.env` dan atur koneksi database Anda:
+Sesuaikan koneksi database (.env) Anda dengan kredensial MySQL yang valid:
 ```env
 PORT=3000
-DB_NAME=wa_database
-MYSQL_HOST=localhost
+DATABASE_DIR=./database
+MYSQL_HOST=109.106.253.215
 MYSQL_PORT=3306
-MYSQL_USER=root
-MYSQL_PASS=
-MYSQL_DB=pwa-super-apps
+MYSQL_USER=your_user
+MYSQL_PASS='your_pass'
+MYSQL_DB=pwa_super_apps
 ```
 
 ### 3. Jalankan Aplikasi
@@ -74,23 +76,22 @@ MYSQL_DB=pwa-super-apps
 # Instal dependensi
 npm install
 
-# Jalankan migrasi data lama ke MySQL (Opsional jika ada data lama)
-node migrate.js
+# Jalankan migrasi enkripsi user lama (Opsional)
+node migrate_passwords.js
 
-# Build frontend & Start server
+# Build frontend production bundle
 npm run build
+
+# Start server (Sync otomatis akan berjalan)
 npm start
 ```
 
-## 📂 Struktur Penting Proyek
-*   `index.js`: Server utama dengan MySQL Bridge logic.
-*   `migrate.js`: Skrip migrasi data dari PouchDB ke MySQL.
-*   `src/server/init_db_schemas.js`: Inisialisasi index NoSQL otomatis.
-*   `src/client/toast.js`: Sistem notifikasi global.
-*   `src/client/db.js`: Konfigurasi sinkronisasi PouchDB.
-
-## 🛠️ Deployment VPS & Sinkronisasi
-Untuk deployment lengkap di server produksi, gunakan PM2 dan Nginx dengan SSL (Certbot). Aplikasi ini **WAJIB** berjalan di HTTPS agar fitur PWA dan Web Crypto (Enkripsi) dapat berfungsi di browser mobile.
+## 📂 File Infrastruktur Penting
+*   `index.js`: Server utama dengan logika Full-Sync Bridge.
+*   `src/server/init_mysql.js`: Skema otomatis & indexing MySQL.
+*   `src/server/init_db_schemas.js`: Inisialisasi index NoSQL (PouchDB).
+*   `migrate_passwords.js`: Tool migrasi keamanan kredensial.
+*   `src/client/toast.js`: Utilitas notifikasi global.
 
 ---
 **Author**: [denisusanto94@gmail.com](mailto:denisusanto94@gmail.com)  
