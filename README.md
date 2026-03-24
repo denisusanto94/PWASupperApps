@@ -28,10 +28,11 @@ Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)
     *   **Multi-Template**: Pilihan template (Classic, Montain, dll) yang responsif.
 
 5.  **Timestamp Camera (Absensi Online & Foto Lokasi)**:
-    *   Pengambilan foto dengan informasi lokasi (Map/Address) dan waktu (Timestamp) yang disematkan langsung pada gambar.
-    *   **Fixed Resolution**: Foto dihasilkan dalam ukuran **1080 x 1350 px** (Aspek rasio 4:5).
-    *   **Adaptive Overlay**: Informasi teks di dalam foto yang proporsional dan jelas.
-    *   **Smart Cropping**: Mengubah otomatis tangkapan kamera landscape menjadi portrait.
+    *   **Metode Ganda**: Pengambilan foto via kamera langsung (Selfie) atau unggah dari galeri (Upload).
+    *   **Resolusi Tinggi (Full HD Portrait)**: Foto dihasilkan dalam ukuran **1080 x 1920 px** (Aspek rasio 9:16).
+    *   **Overlay Presisi Tinggi**: Informasi Koordinat (S/N & E/W dengan 8 desimal), Alamat detail (No. Rumah s/d Provinsi), dan Waktu dengan detik.
+    *   **Kustomisasi Tipografi**: Slider pengaturan ukuran font overlay secara real-time (16px - 72px).
+    *   **Premium Viewfinder**: Antarmuka kamera modern dengan garis fokus dan entry animations.
     *   **Database Sync**: Data foto (Base64) dan metadata lokasi tersimpan aman di PouchDB & MySQL.
 
 
@@ -41,6 +42,7 @@ Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)
 *   **Global Toast System**: Notifikasi cerdas (Success, Error, Warning) yang muncul secara *full-width* di bagian atas layar, menggantikan dialog alert tradisional.
 *   **Offline-First & PWA**: Akses data tetap lancar meskipun koneksi terputus, otomatis sinkron saat kembali online.
 *   **Branded Interface**: Favicon dan ikon aplikasi yang telah diperbarui untuk identitas visual yang seragam.
+*   **HTTPS Mandatory**: Fitur kamera dan enkripsi memerlukan koneksi aman (SSL) untuk berfungsi di browser perangkat mobile.
 
 ## 🛠️ Tech Stack
 
