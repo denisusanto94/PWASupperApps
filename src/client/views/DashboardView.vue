@@ -19,8 +19,10 @@
         <h1 class="header-title">WhatsApp Blaster</h1>
         <div class="header-actions">
           <span class="header-tagline">WhatsApp Blaster PWA</span>
+          <span v-if="sessionId !== 'main'" class="badge badge-session">Session: {{ sessionId }}</span>
         </div>
       </div>
+
     </Teleport>
 
     <section class="card connection-card">
@@ -801,10 +803,29 @@ function formatTime(created, sent) {
   return d.toLocaleString('id-ID');
 }
 
+const sessionId = computed(() => {
+  const params = new URLSearchParams(window.location.search);
+  return params.get('session') || 'main';
+});
+
 async function loadConnection() {
-  const doc = await getConnectionDoc();
-  if (doc) connection.value = doc;
+  // Use API first for faster initial state
+  try {
+    const res = await fetch(`/api/whatsapp/status?id=${sessionId.value}`);
+    if (res.ok) {
+      connection.value = await res.json();
+    }
+  } catch (e) {
+    console.warn('Gagal memuat status via API, mencoba PouchDB...', e);
+  }
+  
+  // Fallback to local PouchDB if still null or to stay synced
+  if (!connection.value) {
+    const doc = await getConnectionDoc();
+    if (doc) connection.value = doc;
+  }
 }
+
 
 async function loadOutbox() {
   outboxList.value = await getOutboxDocs();
@@ -851,7 +872,11 @@ async function requestNewQr() {
   if (restartingConnection.value) return;
   restartingConnection.value = true;
   try {
-    const res = await fetch('/api/whatsapp/restart', { method: 'POST' });
+    const res = await fetch('/api/whatsapp/restart', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: sessionId.value })
+    });
     if (!res.ok) throw new Error((await res.json()).error || res.statusText);
     await loadConnection();
     showToast('Meminta QR baru…', 'success');
@@ -861,6 +886,7 @@ async function requestNewQr() {
     restartingConnection.value = false;
   }
 }
+
 
 watch(totalHistoryPages, (total) => {
   if (historyPage.value > total) historyPage.value = Math.max(1, total);
@@ -1752,6 +1778,12 @@ body {
   background: rgba(239,68,68,0.2);
   color: #f87171;
 }
+.badge-session {
+  background: rgba(99, 102, 241, 0.2);
+  color: #818cf8;
+  margin-left: 0.5rem;
+}
+
 
 .empty {
   color: var(--muted);

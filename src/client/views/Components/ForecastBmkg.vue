@@ -162,12 +162,11 @@ const getWeatherIcon = (status, size = 24) => {
 
     const rainIcon = h('svg', { xmlns: 'http://www.w3.org/2000/svg', width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'url(#rain-grad)', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', class: 'drop-shadow-blue' }, [
         h('path', { d: 'M16 13v8M8 13v8M12 15v8' }),
-        h('path', { d: 'M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25' })
+        h('path', { d: 'M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25c0 2.5 2 4.5 4.5 4.5H17.5' })
     ]);
 
     const cloudIcon = h('svg', { xmlns: 'http://www.w3.org/2000/svg', width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'url(#cloud-grad)', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', class: 'drop-shadow-slate' }, [
-        h('path', { d: 'M17.5 19x' }),
-        h('path', { d: 'M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25' })
+        h('path', { d: 'M17.5 19c2.5 0 4.5-2 4.5-4.5s-2-4.5-4.5-4.5h-1.26A8 8 0 1 0 4 15.25c0 2.5 2 4.5 4.5 4.5H17.5' })
     ]);
 
     if (s.includes('hujan')) return rainIcon;

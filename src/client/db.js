@@ -15,7 +15,12 @@ const updateSyncStatus = (delta) => {
   }
 };
 
-const DB_NAME = import.meta.env.VITE_DB_NAME || 'wa_database';
+const params = new URLSearchParams(window.location.search);
+const sessionId = params.get('session') || 'main';
+const DB_NAME = sessionId === 'main' 
+  ? (import.meta.env.VITE_DB_NAME || 'wa_database')
+  : `wa_database_${sessionId}`;
+
 export const CHAT_DB_NAME = 'chat_messages';
 export const CHAT_USERS_DB_NAME = 'chat_users';
 export const ONLINE_CHAT_DB_NAME = 'is_online_chat';
@@ -27,10 +32,11 @@ export const WEDDING_DB_NAME = 'wedding_invitation';
 export const WEDDING_USERS_DB_NAME = 'wedding_users';
 export const TIMESTAMP_DB_NAME = 'timestamp_camera';
 
-const REMOTE = `/db/${DB_NAME}`;
-console.log('PouchDB Sync Target:', REMOTE);
-
 export const db = new PouchDB(DB_NAME);
+
+const REMOTE = `/db/${DB_NAME}`;
+console.log(`PouchDB [${sessionId}] Sync Target:`, REMOTE);
+
 
 let syncHandler = null;
 
@@ -63,17 +69,22 @@ export function syncModule(dbInstance, dbName) {
  * Tambah dokumen outbox (akan diproses worker dengan jeda 10–15 detik).
  */
 export async function addOutbox(phone, message) {
+  const params = new URLSearchParams(window.location.search);
+  const sessionId = params.get('session') || 'main'; // Use URL session or default to main
+  
   const doc = {
     _id: `outbox_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
     type: 'outbox',
     status: 'pending',
     phone: String(phone).replace(/\D/g, ''),
     message: String(message),
+    sessionId,
     createdAt: new Date().toISOString(),
   };
   const result = await db.put(doc);
   return { ...doc, _rev: result.rev };
 }
+
 
 /**
  * Hapus dokumen outbox (riwayat).
@@ -164,7 +175,6 @@ export function onConnectionChange(callback) {
   return db
     .changes({
       live: true,
-      since: 'now',
       include_docs: true,
       filter: (doc) => doc._id === 'connection',
     })
@@ -190,4 +200,21 @@ export async function saveTimestampCapture(data) {
   
   return await localDb.put(doc);
 }
+
+export async function getTimestampCaptures() {
+  const localDb = new PouchDB(TIMESTAMP_DB_NAME);
+  try {
+    const res = await localDb.allDocs({
+      include_docs: true,
+      startkey: 'ts_',
+      endkey: 'ts_\uffff',
+    });
+    return res.rows
+      .map(r => r.doc)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  } catch (e) {
+    return [];
+  }
+}
+
 

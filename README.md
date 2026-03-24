@@ -29,17 +29,20 @@ Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)
     *   **Multi-Template**: Pilihan template (Classic, Montain, dll) yang responsif.
 
 5.  **Timestamp Camera (Absensi Online & Foto Lokasi)**:
+    *   **On-Demand Camera**: Kamera hanya aktif saat pengguna mengklik tombol "Ambil Foto", menghemat daya dan meningkatkan privasi.
     *   **Metode Ganda**: Pengambilan foto via kamera langsung (Selfie) atau unggah dari galeri (Upload).
     *   **Resolusi Tinggi (Full HD Portrait)**: Foto dihasilkan dalam ukuran **1080 x 1920 px**.
     *   **Overlay Presisi Tinggi**: Koordinat (8 desimal desimal), Alamat detail, dan Waktu (Detik).
+    *   **Modal Preview Details**: Pratinjau hasil foto menggunakan dialog premium untuk detail yang lebih jelas.
     *   **Premium Viewfinder**: Antarmuka modern dengan garis fokus dan entry animations.
 
 6.  **Real-time Insights (Plugins)**:
-    *   **Forecast BMKG**: Prakiraan cuaca resmi dari server BMKG Indonesia.
-    *   **Google News Feed**: Berita terkini harian yang terintegrasi di Dashboard.
+    *   **Forecast BMKG**: Prakiraan cuaca resmi dari server BMKG Indonesia dengan ikon SVG premium.
+    *   **Google News Feed**: Berita terkini harian yang terintegrasi di Dashboard dengan fitur **"Lihat Lebih Banyak" (Load More)**.
 
 ## ✨ Fitur Sistem & UX Modern
 
+*   **PouchDB Instance Registry (getDb)**: Implementasi registry PouchDB untuk memastikan hanya satu instance database yang aktif, meningkatkan stabilitas, terutama pada sistem operasi Windows.
 *   **MySQL Full-Sync Initializer**: Pada saat startup, bridge akan melakukan sinkronisasi penuh (*Full docs sync*) dari PouchDB ke MySQL untuk memastikan seluruh data historis (chat, users, version) terbit ke backend SQL.
 *   **Credential Hardening**: Seluruh password di database dimigrasikan dari plain-text ke format enkripsi AES-256. (Gunakan `migrate_passwords.js` untuk mereset akun lama).
 *   **Global Toast Notification**: Notifikasi cerdas (Full-width top overlay) dengan prioritas `z-index: 10001` yang menjamin pesan sistem selalu terlihat di atas aset visual apa pun.

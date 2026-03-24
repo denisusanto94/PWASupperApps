@@ -2,6 +2,7 @@ import { getSocket, sendWhatsAppMessage } from './baileys.js';
 
 const JITTER_MIN = 10 * 1000;
 const JITTER_MAX = 15 * 1000;
+const activeWorkers = new Set();
 
 function randomDelay() {
   return Math.floor(Math.random() * (JITTER_MAX - JITTER_MIN + 1)) + JITTER_MIN;
@@ -13,11 +14,15 @@ function formatJid(number) {
   return cleaned + '@s.whatsapp.net';
 }
 
-export async function startWorker(db) {
-  const sock = getSocket();
+export async function startWorker(db, sessionId = 'main') {
+  if (activeWorkers.has(sessionId)) return;
+  activeWorkers.add(sessionId);
+
+  const sock = getSocket(sessionId);
   if (!sock) {
-    console.warn('Worker: Baileys belum siap, perubahan outbox akan diproses setelah koneksi.');
+    console.warn(`Worker [${sessionId}]: Baileys belum siap, perubahan outbox akan diproses setelah koneksi.`);
   }
+
 
   const changeHandler = async (change) => {
     if (change.deleted) return;
@@ -25,12 +30,13 @@ export async function startWorker(db) {
       const doc = await db.get(change.id);
       if (doc.type !== 'outbox' || doc.status !== 'pending') return;
 
+      const sessionId = doc.sessionId || 'main';
       const jid = formatJid(doc.phone);
       const text = doc.message || '';
 
       await new Promise((r) => setTimeout(r, randomDelay()));
 
-      await sendWhatsAppMessage(jid, text);
+      await sendWhatsAppMessage(jid, text, sessionId);
       await db.put({
         ...doc,
         status: 'sent',
@@ -38,6 +44,7 @@ export async function startWorker(db) {
       });
     } catch (err) {
       console.error('Worker send error:', err);
+
       try {
         const doc = await db.get(change.id);
         if (doc.type === 'outbox' && doc.status === 'pending') {
@@ -62,5 +69,6 @@ export async function startWorker(db) {
     .on('change', (change) => changeHandler(change))
     .on('error', (err) => console.error('Worker changes error:', err));
 
-  console.log('Worker: mendengarkan outbox (type=outbox, status=pending)');
+  console.log(`Worker [${sessionId}]: mendengarkan outbox (type=outbox, status=pending)`);
 }
+
