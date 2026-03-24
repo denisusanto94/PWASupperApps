@@ -23,7 +23,7 @@
         <div class="app-btn-icon icon-chat">
           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>
         </div>
-        <span class="app-btn-title">Instant Messaging</span>
+        <span class="app-btn-title">Instant Chat</span>
       </router-link>
 
       <router-link to="/wedding-invitation" class="app-btn">
@@ -39,11 +39,79 @@
         </div>
         <span class="app-btn-title">Timestamp Camera</span>
       </router-link>
+
+      <button @click="showResetModal = true" class="app-btn reset-btn">
+        <div class="app-btn-icon icon-reset">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10"/></svg>
+        </div>
+        <span class="app-btn-title">Hard Reset</span>
+      </button>
     </div>
+
+    <!-- Confirmation Modal -->
+    <Transition name="modal-fade">
+      <div v-if="showResetModal" class="reset-modal-overlay" @click.self="showResetModal = false">
+        <div class="reset-modal-card">
+           <div class="warn-icon">⚠️</div>
+           <h3 class="modal-title">Konfirmasi Reset</h3>
+           <p class="modal-body text-balance">Anda akan menghapus SELURUH data lokal (cache, chat, session) pwa ini. Data baru akan ditarik ulang dari server setelah refresh. Lanjutkan?</p>
+           <div class="modal-actions">
+              <button @click="showResetModal = false" class="btn-cancel">Batal</button>
+              <button @click="performHardReset" class="btn-confirm-nuclear">YA, RESET DATA</button>
+           </div>
+        </div>
+      </div>
+    </Transition>
+
+    <NewsGoogle />
+    <ForecastBmkg />
   </div>
 </template>
 
 <script setup>
+import { ref } from 'vue';
+import NewsGoogle from './Components/NewsGoogle.vue';
+import ForecastBmkg from './Components/ForecastBmkg.vue';
+import PouchDB from 'pouchdb-browser';
+import { 
+  CHAT_DB_NAME, CHAT_USERS_DB_NAME, ONLINE_CHAT_DB_NAME, 
+  ONLINE_GENERAL_DB_NAME, VERSION_DB_NAME, GETLYNK_DB_NAME, 
+  GETLYNK_USERS_DB_NAME, WEDDING_DB_NAME, WEDDING_USERS_DB_NAME, 
+  TIMESTAMP_DB_NAME 
+} from '../db.js';
+
+const showResetModal = ref(false);
+
+const performHardReset = async () => {
+  try {
+    const allDbs = [
+      'wa_database', CHAT_DB_NAME, CHAT_USERS_DB_NAME, 
+      ONLINE_CHAT_DB_NAME, ONLINE_GENERAL_DB_NAME, 
+      VERSION_DB_NAME, GETLYNK_DB_NAME, GETLYNK_USERS_DB_NAME, 
+      WEDDING_DB_NAME, WEDDING_USERS_DB_NAME, TIMESTAMP_DB_NAME
+    ];
+    
+    for (const name of allDbs) {
+      const db = new PouchDB(name);
+      await db.destroy();
+    }
+    
+    localStorage.clear();
+    
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      for (const reg of regs) await reg.unregister();
+    }
+    
+    const cachesKeys = await caches.keys();
+    for (const key of cachesKeys) await caches.delete(key);
+    
+    window.location.reload(true);
+  } catch (err) {
+    alert("Gagal reset data penuh. Silakan clear cache browser manual.");
+    window.location.reload();
+  }
+};
 </script>
 
 <style scoped>
@@ -54,84 +122,47 @@
   min-height: 100vh;
 }
 
-.home-hero {
-  text-align: center;
-  margin-bottom: 2.5rem;
-}
+.home-hero { text-align: center; margin-bottom: 2.5rem; }
+.home-title { margin: 0; font-size: 2.2rem; font-weight: 800; color: #fff; letter-spacing: -0.04em; }
+.home-tagline { margin: 0.5rem 0 0; font-size: 1rem; color: var(--muted); }
 
-.home-title {
-  margin: 0;
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--text);
-  letter-spacing: -0.02em;
-}
-
-.home-tagline {
-  margin: 0.5rem 0 0;
-  font-size: 1rem;
-  color: var(--muted);
-}
-
-.app-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  justify-content: center;
-  max-width: 800px;
-  margin: 0 auto;
-}
+.app-buttons { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: center; max-width: 800px; margin: 0 auto; }
 
 .app-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 1rem;
-  background: var(--card);
-  border-radius: 99px;
-  border: 1px solid #334155;
-  text-decoration: none;
-  color: var(--text);
-  transition: all 0.2s ease;
+  display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1.25rem;
+  background: var(--card); border-radius: 99px; border: 1px solid rgba(255,255,255,0.05);
+  text-decoration: none; color: var(--text); transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
 }
 
-.app-btn:hover {
-  border-color: var(--green);
-  background: rgba(37, 211, 102, 0.1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
+.app-btn:hover { border-color: var(--green); background: rgba(37, 211, 102, 0.05); transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
 
-.app-btn-icon {
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.app-btn-icon svg {
-  width: 16px;
-  height: 16px;
-  color: #fff;
-}
+.app-btn-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.app-btn-icon svg { width: 16px; height: 16px; color: #fff; }
 
 .icon-wa { background: linear-gradient(135deg, #25D366 0%, #128C7E 100%); }
 .icon-link { background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); }
 .icon-chat { background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); }
 .icon-wedding { background: linear-gradient(135deg, #e879f9 0%, #c026d3 100%); }
 .icon-absensi { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+.icon-reset { background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%); }
 
-.app-btn-title {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--text);
-}
+.app-btn-title { font-size: 0.9rem; font-weight: 600; }
 
-@media (max-width: 640px) {
-  .app-buttons {
-    gap: 0.6rem;
-  }
-}
+.reset-btn:hover { border-color: #f43f5e; background: rgba(244, 63, 94, 0.05); }
+
+/* Custom Modal */
+.reset-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+.reset-modal-card { background: #1e293b; width: 100%; max-width: 400px; padding: 2.5rem 2rem; border-radius: 32px; text-align: center; box-shadow: 0 30px 60px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.05); }
+.warn-icon { font-size: 3rem; margin-bottom: 1rem; }
+.modal-title { font-size: 1.5rem; font-weight: 800; color: #fff; margin-bottom: 1rem; }
+.modal-body { color: #94a3b8; font-size: 0.95rem; line-height: 1.6; margin-bottom: 2rem; }
+.modal-actions { display: flex; gap: 0.75rem; }
+.btn-cancel { flex: 1; height: 50px; background: #334155; border: none; color: #fff; border-radius: 16px; font-weight: 700; cursor: pointer; }
+.btn-confirm-nuclear { flex: 1; height: 50px; background: #f43f5e; color: #fff; border: none; border-radius: 16px; font-weight: 800; cursor: pointer; box-shadow: 0 10px 20px rgba(244, 63, 94, 0.2); }
+
+.modal-fade-enter-active, .modal-fade-leave-active { transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; transform: scale(0.9); }
+
+@media (max-width: 640px) { .app-buttons { gap: 0.5rem; } .app-btn { width: 100%; justify-content: flex-start; } }
 </style>

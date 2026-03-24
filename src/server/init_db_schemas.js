@@ -6,7 +6,19 @@ import { fileURLToPath } from 'url';
 PouchDB.plugin(PouchDBFind);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_NAMES = ['wa_database', 'chat_messages', 'chat_users', 'getlynkid_data', 'getlynkid_users', 'wedding_invitation', 'wedding_users', 'timestamp_camera'];
+const DB_NAMES = [
+  'wa_database', 
+  'chat_messages', 
+  'chat_users', 
+  'is_online_chat', 
+  'is_online_general', 
+  'pwa_version', 
+  'getlynkid_data', 
+  'getlynkid_users', 
+  'wedding_invitation', 
+  'wedding_users', 
+  'timestamp_camera'
+];
 
 export async function initDbMigrations(dbPath) {
   console.log('--- Memulai Inisialisasi Database (NoSQL Migration) ---');
@@ -47,8 +59,10 @@ export async function initDbMigrations(dbPath) {
       }
 
       console.log(`- DB ${name}: OK.`);
+      await db.close();
     } catch (err) {
       console.warn(`Peringatan DB ${name}:`, err.message);
+      try { await db.close(); } catch(e){}
     }
   }
 

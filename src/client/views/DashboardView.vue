@@ -1,11 +1,6 @@
 <template>
   <div class="app">
-    <Transition name="toast">
-      <div v-if="toast.show" class="toast" :class="toast.type" role="alert">
-        <span class="toast-message">{{ toast.message }}</span>
-        <button type="button" class="toast-close" aria-label="Tutup" @click="dismissToast">×</button>
-      </div>
-    </Transition>
+
 
     <Transition name="modal">
       <div v-if="confirmImport.show" class="modal-overlay" @click.self="cancelImportConfirm">
@@ -386,6 +381,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { showToast } from '../toast.js';
 import {
   startSync,
   addOutbox,
@@ -409,8 +405,7 @@ const contactForm = ref({ name: '', phone: '' });
 const vcfInputRef = ref(null);
 const contactSearch = ref('');
 
-const toast = ref({ show: false, message: '', type: 'info' });
-let toastTimer = null;
+
 
 const confirmImport = ref({
   show: false,
@@ -718,17 +713,7 @@ function parseVcf(text) {
   return items;
 }
 
-function showToast(message, type = 'info') {
-  if (toastTimer) clearTimeout(toastTimer);
-  toast.value = { show: true, message, type };
-  toastTimer = setTimeout(dismissToast, 4000);
-}
 
-function dismissToast() {
-  if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = null;
-  toast.value.show = false;
-}
 
 function cancelImportConfirm() {
   confirmImport.value = { show: false, toAdd: [], skipped: 0, text: '' };
@@ -1153,70 +1138,6 @@ body {
 
 .btn-delete-bulk:hover {
   background: rgba(239, 68, 68, 0.4);
-}
-
-/* Toast - full width top */
-.toast {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  width: 100%;
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
-  font-size: 0.95rem;
-}
-
-.toast.success {
-  background: var(--green);
-  color: #fff;
-}
-
-.toast.error {
-  background: #dc2626;
-  color: #fff;
-}
-
-.toast.info {
-  background: #334155;
-  color: var(--text);
-}
-
-.toast-message {
-  flex: 1;
-  min-width: 0;
-}
-
-.toast-close {
-  flex-shrink: 0;
-  background: none;
-  border: none;
-  color: inherit;
-  font-size: 1.5rem;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0.9;
-  padding: 0 0.25rem;
-}
-
-.toast-close:hover {
-  opacity: 1;
-}
-
-.toast-enter-active,
-.toast-leave-active {
-  transition: transform 0.25s ease, opacity 0.25s ease;
-}
-
-.toast-enter-from,
-.toast-leave-to {
-  transform: translateY(-100%);
-  opacity: 0;
 }
 
 /* Modal konfirmasi */

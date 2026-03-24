@@ -1,8 +1,26 @@
 import PouchDB from 'pouchdb-browser';
+import { reactive } from 'vue';
+
+export const syncStatus = reactive({
+  activeCount: 0,
+  lastSync: localStorage.getItem('pwa_last_sync') || null,
+  error: null
+});
+
+const updateSyncStatus = (delta) => {
+  syncStatus.activeCount = Math.max(0, syncStatus.activeCount + delta);
+  if (delta < 0 && syncStatus.activeCount === 0) {
+    syncStatus.lastSync = new Date().toISOString();
+    localStorage.setItem('pwa_last_sync', syncStatus.lastSync);
+  }
+};
 
 const DB_NAME = import.meta.env.VITE_DB_NAME || 'wa_database';
 export const CHAT_DB_NAME = 'chat_messages';
 export const CHAT_USERS_DB_NAME = 'chat_users';
+export const ONLINE_CHAT_DB_NAME = 'is_online_chat';
+export const ONLINE_GENERAL_DB_NAME = 'is_online_general';
+export const VERSION_DB_NAME = 'pwa_version';
 export const GETLYNK_DB_NAME = 'getlynkid_data';
 export const GETLYNK_USERS_DB_NAME = 'getlynkid_users';
 export const WEDDING_DB_NAME = 'wedding_invitation';
@@ -22,10 +40,10 @@ let syncHandler = null;
  */
 export function startSync() {
   if (syncHandler) return syncHandler;
-  syncHandler = db.sync(REMOTE, {
-    live: true,
-    retry: true,
-  });
+  syncHandler = db.sync(REMOTE, { live: true, retry: true });
+  syncHandler.on('active', () => updateSyncStatus(1))
+            .on('paused', () => updateSyncStatus(-1))
+            .on('error', (err) => { syncStatus.error = err.message; updateSyncStatus(-1); });
   return syncHandler;
 }
 
@@ -34,10 +52,11 @@ export function startSync() {
  */
 export function syncModule(dbInstance, dbName) {
   const remote = new PouchDB(`${location.origin}/db/${dbName}`);
-  return dbInstance.sync(remote, {
-    live: true,
-    retry: true,
-  });
+  const handler = dbInstance.sync(remote, { live: true, retry: true });
+  handler.on('active', () => updateSyncStatus(1))
+         .on('paused', () => updateSyncStatus(-1))
+         .on('error', (err) => { syncStatus.error = err.message; updateSyncStatus(-1); });
+  return handler;
 }
 
 /**

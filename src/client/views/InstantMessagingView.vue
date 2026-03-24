@@ -2,243 +2,316 @@
   <div class="chat-container">
     <Teleport to="#app-header-portal">
       <div class="getlynkid-header-inner">
-        <h1 class="header-title">Chat</h1>
-        <div v-if="isLoggedIn" class="header-actions">
-          <div class="user-info">
-            <span class="online-dot" :class="{ syncing: isSyncing }"></span>
-            <span class="user-badge">{{ currentUser }}</span>
-          </div>
-          <button @click="logout" class="btn-logout" title="Keluar">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+        <div class="flex items-center gap-2">
+           <div class="security-badge-orb">
+             <svg width="12" height="12" viewBox="0 0 24 24" fill="white"><path d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z"/></svg>
+           </div>
+           <h1 class="header-vault-title">Instant Chat</h1>
+        </div>
+        
+        <div v-if="isLoggedIn" class="header-profile-section">
+          <div class="sync-status" :class="{ is_active: !isSyncing }"></div>
+          <button @click="showLogoutConfirm = true" class="premium-avatar-btn" :style="{ background: getAvatarColor(currentUser) }">
+            {{ currentUser[0].toUpperCase() }}
           </button>
         </div>
       </div>
     </Teleport>
 
+    <!-- Logout Confirmation Modal -->
+    <Transition name="fade">
+      <div v-if="showLogoutConfirm" class="confirm-overlay" @click.self="showLogoutConfirm = false">
+        <div class="confirm-card-premium">
+          <div class="exit-icon">🚪</div>
+          <h3>Close Session?</h3>
+          <p>Sesi enkripsi akan dihentikan seketika.</p>
+          <div class="confirm-actions-row">
+            <button @click="showLogoutConfirm = false" class="btn-ghost">Batal</button>
+            <button @click="logout" class="btn-danger-shiny">LOGOUT</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
     <!-- Login Screen -->
     <div v-if="!isLoggedIn" class="login-screen">
-      <div class="login-card">
-        <div class="login-icon-wrapper">💬</div>
-        <h2>Akses Chat</h2>
-        <p>{{ isRegisterMode ? 'Daftar akun chat baru' : 'Masuk menggunakan akun Anda' }}</p>
-        <div class="login-form">
-          <input 
-            v-model="usernameInput" 
-            type="text" 
-            placeholder="Username..." 
-            class="login-input"
-            autofocus
-          />
-          <input 
-            v-model="passwordInput" 
-            @keyup.enter="handleAuth" 
-            type="password" 
-            placeholder="Password..." 
-            class="login-input"
-          />
-          <button @click="handleAuth" class="btn-login" :disabled="!usernameInput.trim() || !passwordInput.trim() || authLoading">
-            {{ isRegisterMode ? 'Daftar & Masuk' : 'Masuk' }}
+      <div class="login-card-vault">
+        <div class="vault-icon-box">
+           <div class="icon-inner-glow">
+             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+           </div>
+        </div>
+        <h2 class="vault-title">Login Instant Chat</h2>
+        <p class="vault-subtitle">{{ isRegisterMode ? 'Daftar akun baru' : 'Masuk ke akun Anda' }}</p>
+        
+        <div class="vault-form">
+          <div class="vault-input-wrap">
+            <input v-model="usernameInput" type="text" placeholder="Username (tanpa spasi)" class="v-input" @input="usernameInput = usernameInput.replace(/\s/g, '')" />
+          </div>
+          <div class="vault-input-wrap">
+            <input v-model="passwordInput" @keyup.enter="handleAuth" type="password" placeholder="Unique Passphrase..." class="v-input" />
+          </div>
+          
+          <button @click="handleAuth" class="btn-vault-action" :disabled="authLoading">
+            <span v-if="!authLoading">{{ isRegisterMode ? 'REGISTER' : 'LOGIN' }}</span>
+            <div v-else class="loader-dots"><span>.</span><span>.</span><span>.</span></div>
           </button>
           
-          <button @click="isRegisterMode = !isRegisterMode" class="btn-toggle-auth">
-            {{ isRegisterMode ? 'Sudah punya akun? Masuk' : 'Belum punya akun? Daftar' }}
+          <button @click="isRegisterMode = !isRegisterMode" class="btn-switch-vault">
+            {{ isRegisterMode ? 'Kembali ke Login' : 'Registrasi' }}
           </button>
         </div>
-        <div class="login-footer">AES-256 SECURED</div>
+        <!-- <div class="v-footer">SECURED BY MILITARY CRYPTOGRAPHY</div> -->
       </div>
     </div>
 
     <!-- Main Chat UI -->
     <div v-else class="chat-main" :class="{ 'contact-selected': !!selectedContact }">
       <!-- Sidebar -->
-      <aside class="chat-sidebar">
-        <div class="sidebar-header">
-          <div class="header-top">
-            <h3>Pesan</h3>
-            <button @click="openNewChatModal" class="btn-new-chat" title="Tambah Chat">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+      <aside class="chat-sidebar-premium">
+        <div class="sidebar-top-box">
+          <div class="flex items-center justify-between mb-6">
+            <h3 class="session-title">Secured Sessions</h3>
+            <button @click="openNewChatModal" class="btn-add-session" title="New Session">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             </button>
           </div>
-          <div class="search-bar">
-            <div class="search-inner">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <input v-model="contactSearchTerm" type="text" placeholder="Cari teman..." />
-            </div>
+          <div class="search-vault-box">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" opacity="0.4"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input v-model="contactSearchTerm" type="text" placeholder="Search sessions..." />
           </div>
         </div>
         
-        <div class="contact-list custom-scrollbar">
-          <div v-if="filteredChatList.length === 0" class="empty-list">
-            <p>{{ contactSearchTerm ? 'Tidak ditemukan' : 'Belum ada chat' }}</p>
+        <div class="sessions-list custom-scrollbar">
+          <div v-if="filteredChatList.length === 0" class="empty-sessions">
+            <p>No active sessions found.</p>
           </div>
-          <div 
-            v-for="chat in filteredChatList" 
-            :key="chat.username" 
-            class="contact-item"
-            :class="{ active: selectedContact?.username === chat.username }"
-            @click="selectContact(chat)"
-          >
-            <div class="avatar-wrapper">
-              <div class="contact-avatar" :style="{ background: getAvatarColor(chat.username) }">
-                {{ chat.username[0].toUpperCase() }}
-              </div>
+          
+          <div v-for="chat in filteredChatList" :key="chat.username" 
+               class="session-row" :class="{ is_active: selectedContact?.username === chat.username }"
+               @click="selectContact(chat)">
+            <div class="session-avatar" :style="{ background: getAvatarColor(chat.username) }">
+              {{ chat.username[0].toUpperCase() }}
+              <div v-if="chat.isOnline" class="pulse-online"></div>
             </div>
-            <div class="contact-info">
-              <div class="contact-name-row">
-                <span class="contact-name">{{ chat.username }}</span>
-                <span class="contact-time text-truncate">{{ formatTimeShort(chat.timestamp) }}</span>
+            <div class="session-info">
+              <div class="session-meta">
+                <span class="session-name">{{ chat.username }}</span>
+                <span class="session-time">{{ formatTimeShort(chat.timestamp) }}</span>
               </div>
-              <div class="contact-last-msg text-truncate">{{ chat.lastMessage }}</div>
+              <div class="session-status">{{ chat.isOnline ? 'Active Now' : 'Encrypted Tunnel Passive' }}</div>
             </div>
           </div>
         </div>
       </aside>
 
       <!-- Chat Window -->
-      <main class="chat-window">
+      <main class="chat-viewport-premium">
         <template v-if="selectedContact">
-          <div class="chat-header">
-            <button @click="selectedContact = null" class="btn-back-mobile" aria-label="Kembali">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+          <div class="viewport-header-premium">
+            <button @click="selectedContact = null" class="btn-nav-back">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
             </button>
-            <div class="contact-header-wrap">
-              <div class="contact-avatar-sm" :style="{ background: getAvatarColor(selectedContact.username) }">
+            <div class="header-recipient">
+              <div class="recipient-avatar" :style="{ background: getAvatarColor(selectedContact.username) }">
                 {{ selectedContact.username[0].toUpperCase() }}
               </div>
-              <div class="chat-header-info">
-                <div class="chat-header-name text-truncate">{{ selectedContact.username }}</div>
-                <div class="chat-header-status">online</div>
+              <div class="recipient-label">
+                <div class="recipient-name">{{ selectedContact.username }}</div>
+                <div class="recipient-lock-status">
+                   <svg v-if="selectedContact.isOnline" width="8" height="8" viewBox="0 0 24 24" fill="#00a884" class="mr-1 animate-pulse"><circle cx="12" cy="12" r="10"/></svg>
+                   <svg v-else width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z"/></svg>
+                   <span>{{ selectedContact.isOnline ? 'Online Now' : 'End-to-End Encrypted' }}</span>
+                </div>
               </div>
             </div>
-            <div class="chat-header-actions">
-              <button @click="startCall('audio')" class="btn-action-icon" title="Voice Call">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.82 12.82 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
-              </button>
-              <button @click="startCall('video')" class="btn-action-icon" title="Video Call">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
-              </button>
+            <div class="header-tools" v-if="selectedContact">
+               <button 
+                  class="t-btn" 
+                  :disabled="!onlineStatusMap[selectedContact.username]" 
+                  @click="initiateCall('audio')"
+                  :title="onlineStatusMap[selectedContact.username] ? 'Audio Call' : 'User Offline'"
+               >
+                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.82 12.82 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
+               </button>
+               <button 
+                  class="t-btn" 
+                  :disabled="!onlineStatusMap[selectedContact.username]" 
+                  @click="initiateCall('video')"
+                  :title="onlineStatusMap[selectedContact.username] ? 'Video Call' : 'User Offline'"
+               >
+                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+               </button>
             </div>
           </div>
 
-          <div class="chat-messages-scroll custom-scrollbar" ref="messageBox">
-            <div class="chat-bg-overlay"></div>
-            
-            <div class="chat-messages-inner">
-              <div v-if="messages.length === 0" class="start-chat-notice">
-                🔒 Enkripsi ujung-ke-ujung aktif
+          <!-- Message Feed -->
+          <div class="viewport-feed custom-scrollbar" ref="messageBox">
+            <div class="mesh-background"></div>
+            <div class="feed-inner">
+              <div v-if="messages.length === 0" class="entry-notice">
+                 Begin your secure conversation. No data leaves this session unencrypted.
               </div>
-
-              <div 
-                v-for="(msg, idx) in messages" 
-                :key="msg._id" 
-                class="message-row"
-                :class="[
-                  msg.from === currentUser ? 'msg-me' : 'msg-them',
-                  isSameUser(msg, messages[idx-1]) ? 'msg-continuous' : 'msg-new'
-                ]"
-              >
-                <div class="message-bubble">
-                  <div v-if="msg.file" class="message-media">
-                    <img v-if="msg.fileType?.startsWith('image/')" :src="msg.file" class="media-img" @click="openImage(msg.file)" loading="lazy" />
-                    <div v-else-if="msg.fileType?.startsWith('video/')" class="media-video-wrap">
-                      <video :src="msg.file" controls class="media-video"></video>
-                    </div>
-                    <audio v-else-if="msg.fileType?.startsWith('audio/')" :src="msg.file" controls class="media-audio"></audio>
-                    <a v-else :href="msg.file" :download="msg.fileName" class="media-file">
-                      <span class="file-icon">📄</span>
-                      <span class="file-info text-truncate">{{ msg.fileName }}</span>
-                      <span class="file-dl">↓</span>
-                    </a>
+              
+              <div v-for="(msg, idx) in messages" :key="msg._id" 
+                   class="msg-group" :class="[msg.from === currentUser ? 'is-me' : 'is-them']">
+                
+                <div class="msg-bubble-premium" :class="{ 'is-call-log': msg.isCallLog }">
+                  <!-- Media Box -->
+                  <div v-if="msg.file" class="msg-media-box">
+                     <img v-if="msg.fileType?.startsWith('image/')" :src="msg.file" @click="openImage(msg.file)" loading="lazy" />
+                     <video v-else-if="msg.fileType?.startsWith('video/')" :src="msg.file" controls></video>
+                     <audio v-else-if="msg.fileType?.startsWith('audio/')" :src="msg.file" controls></audio>
+                     <a v-else :href="msg.file" :download="msg.fileName" class="msg-file-pill">
+                        <div class="fp-icon">📄</div>
+                        <div class="fp-text truncate">{{ msg.fileName }}</div>
+                        <div class="fp-arrow">↓</div>
+                     </a>
                   </div>
+
+                  <div class="msg-text-content" v-if="msg.text">{{ msg.text }}</div>
+                  <div class="msg-text-content italic font-light opacity-50" v-else-if="msg.encrypted && !msg.text">[Outdated Session Key / Pre-update]</div>
                   
-                  <div class="message-text" v-if="msg.text">{{ msg.text }}</div>
-                  
-                  <div class="message-meta">
-                    <span class="msg-time">{{ formatTime(msg.timestamp) }}</span>
-                    <span v-if="msg.from === currentUser" class="msg-status read">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>
-                    </span>
+                  <div class="msg-footer-meta">
+                    <span class="m-time">{{ formatTime(msg.timestamp) }}</span>
+                    <div v-if="msg.from === currentUser" class="m-check">
+                       <svg v-if="msg.status === 'read'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="4"><path d="M20 6L9 17l-5-5M9 17l11-11M20 12l-11 5-5-5"/></svg>
+                       <svg v-else width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4"><path d="M20 6L9 17l-5-5"/></svg>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Chat Input Area -->
-          <div class="chat-input-area">
-            <div class="input-container-inner">
-              <input type="file" ref="fileInput" class="hidden" @change="handleFileSelect" accept="image/*,video/*,audio/*,.pdf,.doc,.docx" />
-              <button @click="$refs.fileInput.click()" class="btn-input-action" aria-label="Lampirkan file">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"></path></svg>
-              </button>
-              
-              <div class="input-field-wrap">
-                <input v-model="newMessage" @keyup.enter="sendMessage" type="text" placeholder="Ketik pesan..." class="chat-input-field" />
-              </div>
-
-              <button @click="sendMessage" class="btn-send-circle" :disabled="!newMessage.trim() && !pendingFile">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-              </button>
+          <!-- Input Controls -->
+          <div class="viewport-controls">
+            <div class="controls-inner">
+               <input type="file" ref="fileInput" class="hidden" @change="handleFileSelect" />
+               <button @click="$refs.fileInput.click()" class="btn-attach">
+                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+               </button>
+               <div class="composer-box">
+                 <input v-model="newMessage" @keyup.enter="sendMessage" type="text" placeholder="Type your secure message..." class="composer-input" />
+               </div>
+               <button @click="sendMessage" class="btn-send-neon" :disabled="!newMessage.trim() && !pendingFile">
+                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+               </button>
             </div>
           </div>
         </template>
         
-        <div v-else class="chat-empty-state">
-          <div class="empty-icon-wrap">💬</div>
-          <h3>Pilih Teman Chat</h3>
-          <p>Mulailah percakapan aman di sini.</p>
-          <button @click="openNewChatModal" class="btn-start-chat-empty">Mulai Chat Baru</button>
-        </div>
+        <!-- Empty State -->
+        <template v-else>
+          <div class="viewport-placeholder">
+             <div class="placeholder-content">
+                <div class="shield-orb-large">
+                   <div class="shield-ripple"></div>
+                   <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="url(#shield-grad)" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                   <defs>
+                     <linearGradient id="shield-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                       <stop offset="0%" style="stop-color:#00a884;stop-opacity:1" />
+                       <stop offset="100%" style="stop-color:#0ea5e9;stop-opacity:1" />
+                     </linearGradient>
+                   </defs>
+                </div>
+                <h2 class="placeholder-title">SECURED MESSAGING</h2>
+                <p class="placeholder-desc">No message history is visible without a session key. Select a contact to initiate a secure tunnel.</p>
+                <button @click="openNewChatModal" class="btn-action-primary">Search New Connection</button>
+             </div>
+          </div>
+        </template>
       </main>
     </div>
 
     <!-- Modals -->
     <Transition name="modal-bounce">
-      <div v-if="showNewChatModal" class="modal-overlay" @click.self="showNewChatModal = false">
-        <div class="modal-card">
-          <div class="modal-header">
-            <h3>Cari Teman</h3>
-            <button @click="showNewChatModal = false" class="btn-modal-close">×</button>
+      <div v-if="showNewChatModal" class="modal-backdrop" @click.self="showNewChatModal = false">
+        <div class="modal-window-premium">
+          <div class="modal-head">
+            <h3>Initialize Secure Session</h3>
+            <button @click="showNewChatModal = false" class="btn-close-modal">×</button>
           </div>
-          <div class="modal-body">
-            <input v-model="newChatUsername" type="text" placeholder="Ketik username teman..." class="modal-input-field" @keyup.enter="startNewChat" ref="newChatInput" />
+          <div class="modal-body-premium">
+            <div class="mod-input-wrap mb-4">
+               <input v-model="newChatUsername" @input="newChatUsername = newChatUsername.replace(/\s/g, '')" type="text" placeholder="Search target username..." class="mod-input" @keyup.enter="startNewChat" ref="newChatInput" />
+            </div>
+            
+            <div class="user-suggestions-box custom-scrollbar">
+               <div v-if="suggestedUsers.length === 0" class="text-center py-4 opacity-50 text-xs">No matching users found.</div>
+               <div v-for="user in suggestedUsers" :key="user" class="suggest-row" @click="selectSuggestedUser(user)">
+                  <div class="suggest-avatar" :style="{ background: getAvatarColor(user) }">{{ user[0].toUpperCase() }}</div>
+                  <div class="flex-1">
+                    <div class="suggest-name">{{ user }}</div>
+                    <div class="suggest-meta">Enrolled in Security Vault</div>
+                  </div>
+                  <div class="suggest-arrow">→</div>
+               </div>
+            </div>
+            
+            <p class="mod-hint mt-4">Pair-based encryption key will be derived instantly upon selection.</p>
           </div>
-          <div class="modal-footer">
-            <button @click="startNewChat" class="btn-modal-primary" :disabled="!newChatUsername.trim()">Mulai</button>
+          <div class="modal-foot">
+            <button @click="startNewChat" class="btn-mod-action" :disabled="!newChatUsername.trim()">Initialize Tunnel</button>
           </div>
         </div>
       </div>
     </Transition>
 
-    <div v-if="previewImage" class="image-preview-full" @click="previewImage = null">
+    <!-- Call Overlay -->
+    <Transition name="fade">
+      <div v-if="activeCall" class="call-overlay-premium">
+        <div class="call-canvas">
+          <video ref="remoteVideoRef" autoplay playsinline class="remote-v"></video>
+          <div class="local-v-wrap" v-show="activeCall.callType === 'video'">
+            <video ref="localVideoRef" autoplay playsinline muted class="local-v"></video>
+          </div>
+          <div class="call-info">
+            <div class="c-avatar" :style="{ background: getAvatarColor(activeCall.other) }">{{ activeCall.other[0].toUpperCase() }}</div>
+            <h3>{{ activeCall.other }}</h3>
+            <p class="status-pulse">{{ callStatus }}</p>
+          </div>
+          <div class="call-actions">
+            <!-- <button @click="toggleMute" class="c-btn" :class="{ 'is-muted': isMuted }">Mute</button> -->
+            <button @click="endCall(true)" class="btn-hangup" title="End Call">
+               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="23" y1="2" x2="1" y2="22"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Incoming Call Modal -->
+    <Transition name="modal-bounce">
+      <div v-if="incomingCall" class="incoming-call-modal">
+        <div class="i-call-card">
+          <div class="i-avatar" :style="{ background: getAvatarColor(incomingCall.from) }">{{ incomingCall.from[0].toUpperCase() }}</div>
+          <h3 class="mb-1">Incoming {{ incomingCall.callType === 'video' ? 'Video' : 'Audio' }} Call</h3>
+          <p class="opacity-70 mb-6">{{ incomingCall.from }} is calling...</p>
+          <div class="i-actions">
+            <button @click="declineCall" class="btn-decline">Decline</button>
+            <button @click="acceptCall" class="btn-accept">Accept</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
+    <div v-if="previewImage" class="preview-overlay-box" @click="previewImage = null">
       <img :src="previewImage" />
     </div>
-
-    <!-- Incoming Call Mock -->
-    <Transition name="fade">
-      <div v-if="activeCall" class="call-overlay-screen">
-        <div class="call-content-box">
-          <div class="call-avatar-circle" :style="{ background: getAvatarColor(activeCall.user) }">
-            {{ activeCall.user[0].toUpperCase() }}
-          </div>
-          <h2 class="text-truncate">{{ activeCall.user }}</h2>
-          <p>{{ callStatus }}</p>
-          <button @click="endCall" class="btn-call-hangup">Akhiri Panggilan</button>
-        </div>
-      </div>
-    </Transition>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed, nextTick, watch } from 'vue';
+import { ref, onMounted, computed, nextTick, watch, onBeforeUnmount } from 'vue';
 import PouchDB from 'pouchdb-browser';
-import { CHAT_DB_NAME, CHAT_USERS_DB_NAME, syncModule } from '../db.js';
+import { CHAT_DB_NAME, CHAT_USERS_DB_NAME, ONLINE_CHAT_DB_NAME, syncModule } from '../db.js';
 import { showToast } from '../toast.js';
 
 // DB Config
 const db = new PouchDB(CHAT_DB_NAME);
 const userDb = new PouchDB(CHAT_USERS_DB_NAME);
+const onlineDb = new PouchDB(ONLINE_CHAT_DB_NAME);
 
 // State
 const currentUser = ref(localStorage.getItem('chat_username') || null);
@@ -252,49 +325,80 @@ const selectedContact = ref(null);
 const messages = ref([]);
 const newMessage = ref('');
 const chatList = ref([]);
+const allRegisteredUsers = ref([]);
 const contactSearchTerm = ref('');
 const showNewChatModal = ref(false);
 const newChatUsername = ref('');
 const previewImage = ref(null);
-const activeCall = ref(null);
-const callStatus = ref('Calling...');
 const messageBox = ref(null);
 const pendingFile = ref(null);
 const fileInput = ref(null);
 const newChatInput = ref(null);
+const showLogoutConfirm = ref(false);
+const onlineStatusMap = ref({});
 
-const SECRET_KEY = 'pwasupperapps_secret_v2';
+// RTC State
+const activeCall = ref(null);
+const incomingCall = ref(null);
+const callStatus = ref('');
+const localVideoRef = ref(null);
+const remoteVideoRef = ref(null);
+const isCallConnected = ref(false);
+let peerConnection = null;
+let localStream = null;
+const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun2.l.google.com:19302' }] };
+
+const SECRET_KEY = 'vault_core_v7.3';
+
+// Base64 Helpers
+function uint8ArrayToBase64(bytes) {
+  let binary = '';
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+function base64ToUint8Array(base64) {
+  const binary = atob(base64 || '');
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
 
 // Encryption utils
-async function deriveKey(username) {
+async function deriveKey(me, other) {
   const enc = new TextEncoder();
-  const keyMat = await window.crypto.subtle.importKey('raw', enc.encode(SECRET_KEY + username), 'PBKDF2', false, ['deriveKey']);
+  const pair = [me, other].sort().join(':');
+  const keyMat = await window.crypto.subtle.importKey('raw', enc.encode(SECRET_KEY + pair), 'PBKDF2', false, ['deriveKey']);
   return window.crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: enc.encode('chat-salt-3'), iterations: 100000, hash: 'SHA-256' }, keyMat, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+    { name: 'PBKDF2', salt: enc.encode('shared-session-v7.3'), iterations: 100000, hash: 'SHA-256' }, 
+    keyMat, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
   );
 }
 
 async function encrypt(text, to) {
+  if (!text) return null;
   const enc = new TextEncoder();
   const iv = window.crypto.getRandomValues(new Uint8Array(12));
-  const key = await deriveKey(to);
+  const key = await deriveKey(currentUser.value, to);
   const encrypted = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(text));
-  return { data: btoa(String.fromCharCode(...new Uint8Array(encrypted))), iv: btoa(String.fromCharCode(...iv)) };
+  return { data: uint8ArrayToBase64(new Uint8Array(encrypted)), iv: uint8ArrayToBase64(iv) };
 }
 
-async function decrypt(obj, from) {
-  const key = await deriveKey(from);
-  const iv = new Uint8Array(atob(obj.iv).split('').map(c => c.charCodeAt(0)));
-  const data = new Uint8Array(atob(obj.data).split('').map(c => c.charCodeAt(0)));
+async function decrypt(obj, other) {
+  if (!obj || !obj.data || !obj.iv || !currentUser.value) return '';
+  const key = await deriveKey(currentUser.value, other);
   try {
+    const iv = base64ToUint8Array(obj.iv);
+    const data = base64ToUint8Array(obj.data);
     const dec = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
     return new TextDecoder().decode(dec);
-  } catch (e) { return '[Terenkripsi]'; }
+  } catch (e) { return ''; }
 }
 
-// Logic
 const getAvatarColor = (name) => {
-  const colors = ['#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#009688', '#4caf50', '#ff9800'];
+  if(!name) return '#2a3942';
+  const colors = ['#f43f5e', '#ec4899', '#d946ef', '#a855f7', '#8b5cf6', '#6366f1', '#3b82f6', '#0ea5e9', '#06b6d4', '#10b981'];
   let h = 0; for(let i=0; i<name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
   return colors[Math.abs(h) % colors.length];
 };
@@ -302,68 +406,325 @@ const getAvatarColor = (name) => {
 const formatTime = (ts) => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const formatTimeShort = (ts) => {
   const d = new Date(ts);
-  return d.toDateString() === new Date().toDateString() ? formatTime(ts) : d.toLocaleDateString([], { day: '2-digit', month: '2' });
+  return d.toDateString() === new Date().toDateString() ? formatTime(ts) : d.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
 };
 
-const isSameUser = (msg, prev) => prev && msg.from === prev.from && (msg.timestamp - prev.timestamp < 120000);
+// Online Heartbeat
+let heartbeatInterval = null;
+const pingOnline = async () => {
+  if (!currentUser.value) return;
+  try {
+    let doc;
+    try { doc = await onlineDb.get(currentUser.value); } catch (e) { doc = { _id: currentUser.value }; }
+    doc.lastSeen = Date.now();
+    doc.type = 'online_status';
+    await onlineDb.put(doc);
+  } catch (e) { console.error('Heartbeat failed', e); }
+};
+
+const loadOnlineStatus = async () => {
+  try {
+    const res = await onlineDb.allDocs({ include_docs: true });
+    const map = {};
+    const now = Date.now();
+    res.rows.forEach(r => {
+      if (r.doc.lastSeen > now - 40000) { map[r.id] = true; }
+    });
+    onlineStatusMap.value = map;
+  } catch (e) {}
+};
+
+const loadAllRoster = async () => {
+  try {
+    const res = await userDb.allDocs({ include_docs: true });
+    allRegisteredUsers.value = res.rows.map(r => r.id).filter(id => id !== currentUser.value && !id.startsWith('_design/'));
+  } catch (e) {}
+};
+
+const suggestedUsers = computed(() => {
+  const q = newChatUsername.value.toLowerCase().trim();
+  if (!q) return allRegisteredUsers.value.slice(0, 10);
+  return allRegisteredUsers.value.filter(u => u.toLowerCase().includes(q));
+});
+
+const selectSuggestedUser = (user) => { newChatUsername.value = user; startNewChat(); };
+
+const AUTH_KEY_TAG = 'secret_vault_auth_v7.3';
+
+async function deriveAuthKey(user) {
+  const enc = new TextEncoder();
+  const keyMat = await window.crypto.subtle.importKey('raw', enc.encode(AUTH_KEY_TAG + user), 'PBKDF2', false, ['deriveKey']);
+  return window.crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: enc.encode('auth-salt-v7.3'), iterations: 50000, hash: 'SHA-256' }, 
+    keyMat, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptAuth(text, user) {
+  const enc = new TextEncoder();
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveAuthKey(user);
+  const encrypted = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(text));
+  return JSON.stringify({ d: uint8ArrayToBase64(new Uint8Array(encrypted)), i: uint8ArrayToBase64(iv) });
+}
+
+async function decryptAuth(cipherStr, user) {
+  if (!cipherStr || !cipherStr.startsWith('{')) return null;
+  try {
+    const { d, i } = JSON.parse(cipherStr);
+    const key = await deriveAuthKey(user);
+    const iv = base64ToUint8Array(i);
+    const data = base64ToUint8Array(d);
+    const dec = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
+    return new TextDecoder().decode(dec);
+  } catch (e) { return null; }
+}
 
 const handleAuth = async () => {
   const username = usernameInput.value.trim();
   const password = passwordInput.value.trim();
   if (!username || !password) return;
-  
+  if (username.includes(' ')) { showToast('Username no spaces.', 'error'); return; }
   authLoading.value = true;
   try {
     if (isRegisterMode.value) {
-      try {
-        await userDb.get(username);
-        showToast('Username sudah dipakai, silakan gunakan username lain atau login.', 'error');
-      } catch (err) {
+      try { await userDb.get(username); showToast('Username has been taken.', 'error'); } catch (err) {
         if (err.status === 404) {
-          await userDb.put({ _id: username, password, createdAt: new Date().toISOString() });
-          showToast('Pendaftaran berhasil! Silakan masuk.');
-          isRegisterMode.value = false;
+          const encryptedPassword = await encryptAuth(password, username);
+          await userDb.put({ _id: username, password: encryptedPassword, createdAt: new Date().toISOString() });
+          showToast('Vault identity created!'); isRegisterMode.value = false;
         } else throw err;
       }
     } else {
       try {
-        const user = await userDb.get(username);
-        if (user.password === password) {
-          currentUser.value = username;
-          localStorage.setItem('chat_username', username);
-          initApp();
+        const userDoc = await userDb.get(username);
+        const storedPass = userDoc.password;
+        // Check if legacy or encrypted
+        if (storedPass.startsWith('{')) {
+          const decryptedPass = await decryptAuth(storedPass, username);
+          if (decryptedPass === password) {
+            localStorage.setItem('chat_username', username);
+            currentUser.value = username;
+            initApp();
+          } else showToast('Invalid passphrase.', 'error');
         } else {
-          showToast('Password salah.', 'error');
+          // Fallback legacy support
+          if (storedPass === password) {
+             localStorage.setItem('chat_username', username);
+             currentUser.value = username;
+             initApp();
+          } else showToast('Invalid passphrase.', 'error');
         }
       } catch (err) {
-        if (err.status === 404) showToast('User tidak ditemukan.', 'error');
+        if (err.status === 404) showToast('Vault identity not found.', 'error');
         else throw err;
       }
     }
-  } catch (err) {
-    console.error('Auth error:', err);
-    showToast('Gagal autentikasi.', 'error');
-  } finally {
-    authLoading.value = false;
-  }
+  } catch (err) { showToast('Error connecting to vault.', 'error'); } finally { authLoading.value = false; }
 };
 
-const logout = () => { currentUser.value = null; localStorage.removeItem('chat_username'); selectedContact.value = null; };
-
-const scrollToBottom = (behavior = 'smooth') => {
-  nextTick(() => { if (messageBox.value) messageBox.value.scrollTo({ top: messageBox.value.scrollHeight, behavior }); });
-};
+const logout = () => { currentUser.value = null; localStorage.removeItem('chat_username'); selectedContact.value = null; showLogoutConfirm.value = false; clearInterval(heartbeatInterval); };
+const scrollToBottom = (behavior = 'smooth') => { nextTick(() => { if (messageBox.value) messageBox.value.scrollTo({ top: messageBox.value.scrollHeight, behavior }); }); };
 
 const startSync = () => {
   syncModule(db, CHAT_DB_NAME);
   syncModule(userDb, CHAT_USERS_DB_NAME);
+  syncModule(onlineDb, ONLINE_CHAT_DB_NAME);
+  db.changes({ live: true, since: 'now', include_docs: true }).on('change', (change) => {
+    // Immediate RTC check
+    if (change.doc.type === 'rtc_signal') handleRtcSignal(change.doc);
+    else refreshUI();
+  });
+  onlineDb.changes({ live: true, since: 'now', include_docs: true }).on('change', () => loadOnlineStatus());
+  userDb.changes({ live: true, since: 'now', include_docs: true }).on('change', () => loadAllRoster());
+};
+
+// --- WebRTC Implementation ---
+
+async function sendSignal(to, data) {
+  const signalDoc = {
+    _id: `rtc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    type: 'rtc_signal', from: currentUser.value, to, data, timestamp: Date.now()
+  };
+  await db.put(signalDoc);
+}
+
+const handleRtcSignal = async (doc) => {
+  if (doc.to !== currentUser.value) return;
+  const { from, data } = doc;
   
-  db.changes({ live: true, since: 'now', include_docs: true }).on('change', () => { refreshUI(); });
+  if (data.type === 'offer') {
+    if (activeCall.value || incomingCall.value) {
+       // Busy
+       return;
+    }
+    incomingCall.value = { from, callType: data.callType, offer: data.offer };
+  } else if (data.type === 'answer') {
+    if (peerConnection) await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+    callStatus.value = 'Connected';
+    isCallConnected.value = true;
+  } else if (data.type === 'candidate') {
+    if (peerConnection) await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
+  } else if (data.type === 'hangup') {
+    if (activeCall.value?.other === from) {
+       const callType = activeCall.value.callType;
+       const wasConnected = isCallConnected.value;
+       const logText = wasConnected 
+         ? `📞 ${callType === 'video' ? 'Video' : 'Voice'} Call Ended` 
+         : `↙️ Missed ${callType === 'video' ? 'Video' : 'Voice'} Call`;
+       
+       if (selectedContact.value?.username === from) logLocalCall(from, logText);
+       endCall(false);
+    }
+    if (incomingCall.value?.from === from) {
+       logLocalCall(from, `↙️ Missed ${incomingCall.value.callType === 'video' ? 'Video' : 'Voice'} Call`);
+       incomingCall.value = null;
+    }
+  }
+  
+  // Clean up signal doc immediately to prevent re-processing
+  try { await db.remove(doc); } catch(e){}
+};
+
+const initiateCall = async (type) => {
+  if (!selectedContact.value) return;
+  const other = selectedContact.value.username;
+  activeCall.value = { other, callType: type, isInitiator: true };
+  callStatus.value = 'Ringing...';
+  
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ 
+      video: type === 'video', 
+      audio: true 
+    });
+    
+    // Wait for next tick so refs are available
+    await nextTick();
+    if (localVideoRef.value) localVideoRef.value.srcObject = localStream;
+    
+    peerConnection = new RTCPeerConnection(rtcConfig);
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+    
+    peerConnection.ontrack = (event) => {
+      if (remoteVideoRef.value) remoteVideoRef.value.srcObject = event.streams[0];
+    };
+    
+    peerConnection.onicecandidate = (event) => {
+      if (event.candidate) sendSignal(other, { type: 'candidate', candidate: event.candidate });
+    };
+    
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+    sendSignal(other, { type: 'offer', offer, callType: type });
+    
+  } catch (err) {
+    showToast('Media access denied or failed.', 'error');
+    endCall(true);
+  }
+};
+
+const acceptCall = async () => {
+  if (!incomingCall.value) return;
+  const { from, offer, callType } = incomingCall.value;
+  activeCall.value = { other: from, callType, isInitiator: false };
+  callStatus.value = 'Connecting...';
+  incomingCall.value = null;
+  
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ 
+      video: callType === 'video', 
+      audio: true 
+    });
+    
+    await nextTick();
+    if (localVideoRef.value) localVideoRef.value.srcObject = localStream;
+    
+    peerConnection = new RTCPeerConnection(rtcConfig);
+    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+    
+    peerConnection.ontrack = (event) => {
+      if (remoteVideoRef.value) remoteVideoRef.value.srcObject = event.streams[0];
+    };
+    
+    peerConnection.onicecandidate = (event) => {
+      if (event.candidate) sendSignal(from, { type: 'candidate', candidate: event.candidate });
+    };
+    
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await peerConnection.createAnswer();
+    await peerConnection.setLocalDescription(answer);
+    sendSignal(from, { type: 'answer', answer });
+    
+    callStatus.value = 'Connected';
+    isCallConnected.value = true;
+  } catch (err) {
+    showToast('Failed to accept call.', 'error');
+    endCall(true);
+  }
+};
+
+const logLocalCall = (target, text) => {
+  const msg = {
+    _id: `call_log_${Date.now()}_${Math.random().toString(36).slice(2,5)}`,
+    type: 'chat_msg', from: target, to: currentUser.value, text, timestamp: Date.now(), isCallLog: true, status: 'read'
+  };
+  messages.value.push(msg); // Local state push only for instant feedback
+  scrollToBottom();
+};
+
+const logCallDoc = async (target, text) => {
+  const msgDoc = {
+    _id: `call_doc_${Date.now()}_${Math.random().toString(34).slice(2, 6)}`,
+    type: 'chat_msg', from: currentUser.value, to: target, text, status: 'sent',
+    timestamp: Date.now(), isCallLog: true
+  };
+  await db.put(msgDoc);
+  refreshUI();
+};
+
+const declineCall = async () => {
+  if (incomingCall.value) {
+    const { from, callType } = incomingCall.value;
+    await sendSignal(from, { type: 'hangup' });
+    await logCallDoc(from, `↘️ Missed ${callType === 'video' ? 'Video' : 'Voice'} Call`);
+    incomingCall.value = null;
+  }
+};
+
+const endCall = (sendHangup = true) => {
+  const other = activeCall.value?.other;
+  const wasConnected = isCallConnected.value;
+  const callType = activeCall.value?.callType;
+
+  if (sendHangup && other) {
+    sendSignal(other, { type: 'hangup' });
+    const logText = wasConnected 
+      ? `📞 ${callType === 'video' ? 'Video' : 'Voice'} Call Ended` 
+      : `🚫 Cancelled ${callType === 'video' ? 'Video' : 'Voice'} Call`;
+    
+    logCallDoc(other, logText);
+  }
+  
+  if (localStream) {
+    localStream.getTracks().forEach(t => t.stop());
+    localStream = null;
+  }
+  if (peerConnection) {
+    peerConnection.close();
+    peerConnection = null;
+  }
+  
+  activeCall.value = null;
+  callStatus.value = '';
+  isCallConnected.value = false;
 };
 
 const refreshUI = async () => {
   await loadChatList();
-  if (selectedContact.value) await loadMessages(selectedContact.value.username);
+  if (selectedContact.value) {
+    await loadMessages(selectedContact.value.username);
+    await markAsRead(selectedContact.value.username);
+  }
 };
 
 const loadChatList = async () => {
@@ -373,7 +734,7 @@ const loadChatList = async () => {
   all.forEach(m => {
     const other = m.from === currentUser.value ? m.to : m.from;
     if (!groups[other] || groups[other].timestamp < m.timestamp) {
-      groups[other] = { username: other, lastMessage: m.textPreview || 'Media', timestamp: m.timestamp };
+      groups[other] = { username: other, timestamp: m.timestamp, isOnline: onlineStatusMap.value[other] || false };
     }
   });
   chatList.value = Object.values(groups).sort((a,b) => b.timestamp - a.timestamp);
@@ -381,24 +742,42 @@ const loadChatList = async () => {
 
 const filteredChatList = computed(() => {
   const q = contactSearchTerm.value.toLowerCase().trim();
-  if (!q) return chatList.value;
-  return chatList.value.filter(c => c.username.toLowerCase().includes(q));
+  const list = chatList.value.map(c => ({ ...c, isOnline: onlineStatusMap.value[c.username] || false }));
+  if (!q) return list;
+  return list.filter(c => c.username.toLowerCase().includes(q));
 });
 
 const selectContact = async (contact) => {
-  selectedContact.value = contact;
+  selectedContact.value = { ...contact, isOnline: onlineStatusMap.value[contact.username] || false };
   await loadMessages(contact.username);
+  await markAsRead(contact.username);
   scrollToBottom('auto');
 };
 
-const loadMessages = async (other) => {
+const markAsRead = async (other) => {
   const res = await db.allDocs({ include_docs: true });
-  const msgs = res.rows.map(r => r.doc)
+  const unread = res.rows.map(r => r.doc).filter(d => 
+    d.type === 'chat_msg' && d.from === other && d.to === currentUser.value && d.status !== 'read'
+  );
+  if (unread.length > 0) {
+    for (let m of unread) { m.status = 'read'; await db.put(m); }
+  }
+};
+
+const loadMessages = async (other) => {
+  if (!currentUser.value) return;
+  const res = await db.allDocs({ include_docs: true });
+  const rawMsgs = res.rows.map(r => r.doc)
     .filter(d => d.type === 'chat_msg' && ((d.from === currentUser.value && d.to === other) || (d.from === other && d.to === currentUser.value)))
     .sort((a,b) => a.timestamp - b.timestamp);
   
-  for(let m of msgs) if(m.encrypted && !m.text) m.text = await decrypt(m.encrypted, other);
-  messages.value = msgs;
+  const processed = await Promise.all(rawMsgs.map(async (m) => {
+    const doc = { ...m };
+    if (doc.encrypted && (!doc.text || doc.text === '')) doc.text = await decrypt(doc.encrypted, other);
+    if (doc.encryptedFile && !doc.file) doc.file = await decrypt(doc.encryptedFile, other);
+    return doc;
+  }));
+  messages.value = processed;
 };
 
 const sendMessage = async () => {
@@ -406,206 +785,221 @@ const sendMessage = async () => {
   const to = selectedContact.value.username;
   const text = newMessage.value;
   const encrypted = await encrypt(text, to);
+  let encryptedFile = null;
+  if(pendingFile.value) encryptedFile = await encrypt(pendingFile.value.data, to);
+
   const msgDoc = {
     _id: `chat_${Date.now()}_${Math.random().toString(34).slice(2, 6)}`,
-    type: 'chat_msg', from: currentUser.value, to, encrypted,
-    textPreview: text.substring(0, 30) || 'Media', timestamp: Date.now()
+    type: 'chat_msg', from: currentUser.value, to, encrypted, encryptedFile, status: 'sent',
+    timestamp: Date.now(), fileName: pendingFile.value?.name || null, fileType: pendingFile.value?.type || null
   };
-  if (pendingFile.value) { 
-    msgDoc.file = pendingFile.value.data; 
-    msgDoc.fileName = pendingFile.value.name; 
-    msgDoc.fileType = pendingFile.value.type; 
-  }
   await db.put(msgDoc);
-  newMessage.value = ''; pendingFile.value = null;
-  await refreshUI();
-  scrollToBottom();
+  newMessage.value = ''; pendingFile.value = null; refreshUI(); scrollToBottom();
 };
 
 const handleFileSelect = (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
+  const file = e.target.files[0]; if(!file) return;
   const reader = new FileReader();
   reader.onload = (ev) => { pendingFile.value = { name: file.name, type: file.type, data: ev.target.result }; sendMessage(); };
   reader.readAsDataURL(file);
 };
 
 const openNewChatModal = () => { showNewChatModal.value = true; nextTick(() => newChatInput.value?.focus()); };
-
 const startNewChat = () => {
   if (!newChatUsername.value.trim()) return;
   const user = newChatUsername.value.trim();
-  selectContact({ username: user, lastMessage: '' });
+  if (user === currentUser.value) { showToast('Cannot chat with yourself.', 'error'); return; }
+  selectContact({ username: user });
   showNewChatModal.value = false; newChatUsername.value = '';
 };
 
-const startCall = (u) => { activeCall.value = { user: selectedContact.value.username }; callStatus.value = 'Connecting...'; setTimeout(() => callStatus.value = 'Calling...', 1200); };
-const endCall = () => activeCall.value = null;
 const openImage = (url) => previewImage.value = url;
-
-function initApp() {
-  loadChatList();
-  startSync();
+function initApp() { 
+  loadChatList(); 
+  loadOnlineStatus();
+  loadAllRoster();
+  startSync(); 
+  pingOnline();
+  heartbeatInterval = setInterval(() => { pingOnline(); loadOnlineStatus(); loadAllRoster(); }, 30000);
 }
 
-const clearAllData = async () => {
-  const pwd = prompt('Masukkan Password untuk menghapus seluruh data chat:');
-  if (pwd === '12345678') {
-    if (confirm('Apakah Anda yakin ingin menghapus SELURUH data chat secara permanen?')) {
-      try {
-        await db.destroy();
-        localStorage.removeItem('chat_username');
-        location.reload();
-      } catch (err) {
-        showToast('Gagal menghapus data: ' + err.message, 'error');
-      }
-    }
-  } else if (pwd !== null) {
-    showToast('Password Salah!', 'error');
-  }
-};
-
 onMounted(() => { if (isLoggedIn.value) initApp(); });
+onBeforeUnmount(() => clearInterval(heartbeatInterval));
 </script>
 
 <style scoped>
-.chat-container { height: calc(100vh - 56px); display: flex; flex-direction: column; background: #0b141a; overflow: hidden; }
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
-/* Scroll */
+.chat-container { height: calc(100vh - 56px); display: flex; flex-direction: column; background: #090e11; overflow: hidden; font-family: 'Outfit', sans-serif; }
 .custom-scrollbar::-webkit-scrollbar { width: 3px; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); border-radius: 4px; }
+
+/* Header Premium */
+.getlynkid-header-inner { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.security-badge-orb { background: #00a884; border-radius: 8px; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 15px rgba(0, 168, 132, 0.4); }
+.header-vault-title { font-size: 1.1rem; font-weight: 800; color: #fff; letter-spacing: -0.02em; }
+.header-profile-section { display: flex; align-items: center; gap: 0.75rem; }
+.premium-avatar-btn { width: 36px; height: 36px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.1); color: #fff; font-weight: 800; font-size: 0.9rem; cursor: pointer; transition: 0.2s; }
+.premium-avatar-btn:hover { transform: scale(1.05); }
+.sync-status { width: 7px; height: 7px; border-radius: 50%; background: #3b82f6; }
+.sync-status.is_active { background: #00a884; box-shadow: 0 0 8px #00a884; }
 
 /* Login */
-.login-screen { flex: 1; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at center, #111b21 0%, #0b141a 100%); padding: 1rem; }
-.login-card { background: #202c33; padding: 2rem 1.5rem; border-radius: 16px; width: 100%; max-width: 300px; text-align: center; border: 1px solid rgba(255,255,255,0.03); box-shadow: 0 15px 40px rgba(0,0,0,0.4); }
-.login-icon-wrapper { font-size: 2.25rem; margin-bottom: 0.5rem; }
-.login-card h2 { margin: 0 0 0.25rem; font-size: 1.35rem; color: #fff; }
-.login-card p { color: #8696a0; font-size: 0.8rem; margin-bottom: 2rem; }
-.login-input { width: 100%; background: #111b21; border: 1px solid rgba(255,255,255,0.08); color: #fff; padding: 0.75rem; border-radius: 10px; margin-bottom: 1rem; font-size: 0.9rem; outline: none; }
-.btn-login { width: 100%; background: #00a884; color: #fff; border: none; padding: 0.75rem; border-radius: 10px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 0.5rem; }
-.btn-clear-data { width: 100%; background: transparent; border: 1px solid rgba(234, 67, 53, 0.3); color: #ea4335; padding: 0.65rem; border-radius: 10px; font-weight: 600; font-size: 0.75rem; margin-top: 0.75rem; cursor: pointer; transition: all 0.2s; }
-.btn-clear-data:hover { background: rgba(234, 67, 53, 0.1); border-color: #ea4335; }
-.btn-toggle-auth { background: transparent; border: none; color: #8696a0; padding: 0.65rem; margin-top: 0.25rem; cursor: pointer; font-size: 0.75rem; text-decoration: underline; width: 100%; }
-.login-footer { margin-top: 1.5rem; font-size: 0.6rem; color: #667781; letter-spacing: 0.1em; }
+.login-screen { flex: 1; display: flex; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 50%, #111b21 0%, #090e11 100%); }
+.login-card-vault { background: rgba(32, 44, 51, 0.6); backdrop-filter: blur(30px); padding: 3.5rem 2rem; border-radius: 40px; width: 90%; max-width: 400px; text-align: center; border: 1px solid rgba(255,255,255,0.04); }
+.vault-icon-box { width: 90px; height: 90px; background: rgba(0, 168, 132, 0.1); border-radius: 30px; margin: 0 auto 2rem; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(0, 168, 132, 0.2); }
+.icon-inner-glow { color: #00a884; filter: drop-shadow(0 0 10px rgba(0, 168, 132, 0.5)); }
+.vault-title { font-size: 2rem; font-weight: 800; color: #fff; letter-spacing: -0.05em; margin-bottom: 0.5rem; }
+.vault-subtitle { color: #8696a0; font-size: 0.95rem; margin-bottom: 2.5rem; }
+.vault-input-wrap { background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); border-radius: 18px; margin-bottom: 1rem; padding: 0 1.25rem; }
+.v-input { width: 100%; height: 56px; background: transparent; border: none; color: #fff; font-size: 1rem; outline: none; }
+.btn-vault-action { width: 100%; height: 58px; background: linear-gradient(135deg, #00a884 0%, #005c4b 100%); color: #fff; border: none; border-radius: 18px; font-weight: 800; margin-top: 1rem; cursor: pointer; box-shadow: 0 10px 25px rgba(0,0,0,0.3); }
+.btn-switch-vault { background: transparent; border: none; color: #8696a0; margin-top: 1.5rem; font-weight: 600; font-size: 0.85rem; cursor: pointer; text-decoration: underline; }
+.v-footer { margin-top: 2rem; font-size: 0.7rem; color: #667781; letter-spacing: 0.3em; font-weight: 700; }
 
-/* Main */
-.chat-main { flex: 1; display: flex; overflow: hidden; position: relative; }
+/* Main UI */
+.chat-main { flex: 1; display: flex; height: 100%; position: relative; }
+.chat-sidebar-premium { width: 350px; background: #111b21; border-right: 1px solid rgba(255,255,255,0.03); display: flex; flex-direction: column; }
+.sidebar-top-box { padding: 2rem 1.5rem; }
+.session-title { font-size: 1.6rem; font-weight: 800; color: #fff; letter-spacing: -0.04em; }
+.btn-add-session { width: 44px; height: 44px; background: #00a884; color: #fff; border: none; border-radius: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 5px 15px rgba(0, 168, 132, 0.3); }
+.search-vault-box { background: #202c33; border-radius: 16px; padding: 0 1.25rem; display: flex; align-items: center; gap: 0.75rem; }
+.search-vault-box input { flex: 1; height: 48px; background: transparent; border: none; color: #fff; font-size: 0.95rem; outline: none; }
 
-/* Sidebar */
-.chat-sidebar { width: 300px; border-right: 1px solid rgba(255,255,255,0.03); display: flex; flex-direction: column; background: #111b21; transition: transform 0.3s; }
-.sidebar-header { padding: 0.75rem 1rem; }
-.header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; }
-.header-top h3 { margin: 0; font-size: 1.1rem; color: #fff; font-weight: 700; }
-.btn-new-chat { background: #202c33; color: #00a884; border: none; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.1s; }
-.btn-new-chat:active { transform: scale(0.9); }
+.sessions-list { flex: 1; overflow-y: auto; }
+.session-row { display: flex; align-items: center; gap: 1.25rem; padding: 1.25rem 1.5rem; cursor: pointer; transition: 0.2s; border-bottom: 1px solid rgba(255,255,255,0.01); }
+.session-row:hover { background: rgba(255,255,255,0.02); }
+.session-row.is_active { background: #2a3942; }
+.session-avatar { width: 54px; height: 54px; border-radius: 20px; display: flex; align-items: center; justify-content: center; font-weight: 800; color: #fff; font-size: 1.2rem; position: relative; }
+.pulse-online { position: absolute; top: -3px; right: -3px; width: 14px; height: 14px; background: #00a884; border-radius: 50%; border: 3px solid #111b21; box-shadow: 0 0 10px #00a884; }
+.session-info { flex: 1; min-width: 0; }
+.session-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; }
+.session-name { font-weight: 700; color: #e9edef; font-size: 1rem; }
+.session-time { font-size: 0.7rem; color: #8696a0; font-weight: 600; }
+.session-status { font-size: 0.85rem; color: #8696a0; }
 
-.search-inner { background: #202c33; border-radius: 10px; display: flex; align-items: center; padding: 0 0.75rem; gap: 0.6rem; color: #8696a0; }
-.search-inner input { flex: 1; height: 34px; background: transparent; border: none; color: #fff; font-size: 0.85rem; outline: none; }
+/* Viewport Premium */
+.chat-viewport-premium { flex: 1; display: flex; flex-direction: column; background: #090e11; position: relative; min-width: 0; }
+.viewport-header-premium { height: 75px; background: rgba(32, 44, 51, 0.95); backdrop-filter: blur(20px); display: flex; align-items: center; padding: 0 1.5rem; z-index: 100; border-bottom: 1px solid rgba(255,255,255,0.02); }
+.btn-nav-back { background: transparent; border: none; color: #fff; display: none; margin-right: 0.5rem; cursor: pointer; }
+.header-recipient { flex: 1; display: flex; align-items: center; gap: 1rem; min-width: 0; }
+.recipient-avatar { width: 44px; height: 44px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-weight: 800; color: #fff; flex-shrink: 0; }
+.recipient-name { font-weight: 800; color: #fff; font-size: 1.1rem; }
+.recipient-lock-status { display: flex; align-items: center; gap: 0.35rem; font-size: 0.65rem; color: #00a884; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.1rem; }
 
-.contact-list { flex: 1; overflow-y: auto; }
-.empty-list { text-align: center; padding: 3rem 1rem; color: #8696a0; font-size: 0.85rem; }
+.header-tools { display: flex; gap: 0.85rem; align-items: center; }
+.t-btn { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.05); color: #00a884; width: 42px; height: 42px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 14px; }
+.t-btn:hover { background: #00a884; color: #fff; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0, 168, 132, 0.3); }
+.t-btn:active { transform: translateY(0) scale(0.95); }
 
-.contact-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.7rem 1rem; cursor: pointer; transition: background 0.1s; border-bottom: 1px solid rgba(255,255,255,0.01); }
-.contact-item:hover { background: #202c33; }
-.contact-item.active { background: #2a3942; }
-.contact-avatar { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #fff; font-size: 1rem; border: 2px solid #111b21; }
-.contact-info { flex: 1; min-width: 0; }
-.contact-name-row { display: flex; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.15rem; }
-.contact-name { font-weight: 600; font-size: 0.92rem; color: #e9edef; }
-.contact-time { font-size: 0.65rem; color: #8696a0; white-space: nowrap; }
-.contact-last-msg { font-size: 0.8rem; color: #8696a0; }
+/* Message Feed */
+.viewport-feed { flex: 1; overflow-y: auto; position: relative; display: flex; flex-direction: column; }
+.mesh-background { position: absolute; inset: 0; opacity: 0.03; background-image: radial-gradient(#fff 0.8px, transparent 0.8px); background-size: 24px 24px; }
+.feed-inner { padding: 2.5rem 1.5rem; display: flex; flex-direction: column; gap: 1rem; z-index: 2; margin-top: auto; }
+.entry-notice { align-self: center; width: 100%; max-width: 400px; text-align: center; background: rgba(0, 168, 132, 0.05); border: 1px solid rgba(0, 168, 132, 0.1); padding: 1rem; border-radius: 16px; font-size: 0.75rem; color: #8696a0; font-weight: 600; line-height: 1.6; margin-bottom: 3rem; }
 
-/* Window */
-.chat-window { flex: 1; display: flex; flex-direction: column; background: #0b141a; position: relative; min-width: 0; }
-.chat-header { padding: 0.5rem 0.75rem; background: #202c33; display: flex; align-items: center; gap: 0.6rem; z-index: 10; height: 50px; }
-.btn-back-mobile { background: transparent; border: none; color: #fff; cursor: pointer; padding: 0.4rem; display: none; }
-.contact-header-wrap { flex: 1; display: flex; align-items: center; gap: 0.6rem; min-width: 0; }
-.contact-avatar-sm { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; color: #fff; font-size: 0.85rem; flex-shrink: 0; }
-.chat-header-info { min-width: 0; }
-.chat-header-name { font-weight: 600; font-size: 0.9rem; color: #fff; }
-.chat-header-status { font-size: 0.65rem; color: #00a884; font-weight: 500; }
+.msg-group { display: flex; width: 100%; }
+.is-me { justify-content: flex-end; padding-left: 15%; }
+.is-them { justify-content: flex-start; padding-right: 15%; }
 
-.chat-header-actions { display: flex; gap: 0.25rem; }
-.btn-action-icon { background: transparent; border: none; color: #aebac1; cursor: pointer; padding: 0.5rem; border-radius: 50%; }
-.btn-action-icon:hover { background: rgba(255,255,255,0.05); color: #fff; }
+.msg-bubble-premium { max-width: 100%; padding: 0.85rem 1rem; border-radius: 20px; position: relative; box-shadow: 0 4px 15px rgba(0,0,0,0.1); overflow-wrap: anywhere; word-break: break-all; }
+.is-me .msg-bubble-premium { background: linear-gradient(135deg, #005c4b 0%, #004d3e 100%); color: #fff; border-bottom-right-radius: 4px; border: 1px solid rgba(0, 168, 132, 0.2); }
+.is-them .msg-bubble-premium { background: #202c33; color: #fff; border-bottom-left-radius: 4px; border: 1px solid rgba(255,255,255,0.03); }
 
-.chat-messages-scroll { flex: 1; overflow-y: auto; position: relative; scroll-behavior: smooth; }
-.chat-messages-inner { padding: 1rem; display: flex; flex-direction: column; gap: 3px; position: relative; z-index: 1; }
-.chat-bg-overlay { position: absolute; inset: 0; opacity: 0.03; background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 15px 15px; }
-
-.start-chat-notice { background: rgba(0,0,0,0.25); padding: 0.4rem 0.75rem; border-radius: 6px; font-size: 0.65rem; color: #8696a0; align-self: center; margin-bottom: 1.5rem; }
-
-.message-row { display: flex; width: 100%; }
-.msg-me { justify-content: flex-end; }
-.msg-them { justify-content: flex-start; }
-.msg-new { margin-top: 8px; }
-
-.message-bubble { max-width: 75%; padding: 0.35rem 0.5rem; border-radius: 8px; position: relative; box-shadow: 0 1px 0.5px rgba(0,0,0,0.1); }
-.msg-me .message-bubble { background: #005c4b; color: #e9edef; border-top-right-radius: 0; }
-.msg-them .message-bubble { background: #202c33; color: #e9edef; border-top-left-radius: 0; }
-.msg-continuous .message-bubble { border-radius: 8px !important; }
-
-.message-text { font-size: 0.9rem; line-height: 1.45; word-break: break-word; }
-.message-meta { display: flex; justify-content: flex-end; align-items: center; gap: 0.25rem; margin-top: 0.1rem; opacity: 0.7; }
-.msg-time { font-size: 0.6rem; }
-.msg-status.read { color: #53bdeb; }
-
-/* Input */
-.chat-input-area { padding: 0.5rem 0.75rem; background: #202c33; }
-.input-container-inner { display: flex; align-items: center; gap: 0.4rem; max-width: 900px; margin: 0 auto; }
-.btn-input-action { background: transparent; border: none; color: #8696a0; padding: 0.5rem; cursor: pointer; }
-.input-field-wrap { flex: 1; background: #2a3942; border-radius: 12px; }
-.chat-input-field { width: 100%; height: 38px; border: none; background: transparent; color: #fff; padding: 0 0.8rem; font-size: 0.9rem; outline: none; }
-.btn-send-circle { width: 38px; height: 38px; background: #00a884; color: #fff; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
-.btn-send-circle:disabled { background: #334155; opacity: 0.5; }
-
-/* Media */
-.media-img { border-radius: 4px; max-width: 100%; cursor: pointer; margin-bottom: 0.2rem; }
-.media-video { border-radius: 4px; max-width: 100%; display: block; }
-.media-audio { width: 100%; max-width: 220px; height: 32px; }
-.media-file { display: flex; align-items: center; gap: 0.5rem; background: rgba(0,0,0,0.1); padding: 0.5rem; border-radius: 6px; text-decoration: none; color: #fff; margin-bottom: 0.2rem; }
-.file-info { flex: 1; font-size: 0.8rem; font-weight: 500; }
-
-/* Modals */
-.modal-overlay { position: fixed; inset: 0; background: rgba(11,20,26,0.8); backdrop-filter: blur(2px); z-index: 2000; display: flex; align-items: center; justify-content: center; }
-.modal-card { background: #222e35; width: 85%; max-width: 300px; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
-.modal-header { padding: 0.8rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.04); display: flex; justify-content: space-between; align-items: center; }
-.modal-header h3 { margin:0; font-size: 0.95rem; }
-.modal-body { padding: 1rem; }
-.modal-input-field { width: 100%; background: #111b21; border: 1px solid rgba(255,255,255,0.08); color: #fff; padding: 0.65rem; border-radius: 8px; font-size: 0.85rem; outline: none; }
-.modal-footer { padding: 0.5rem 1rem 1rem; display: flex; justify-content: flex-end; }
-.btn-modal-primary { background: #00a884; color: #fff; border: none; padding: 0.5rem 1.25rem; border-radius: 6px; font-weight: 700; cursor: pointer; }
-
-/* Call/Preview */
-.call-overlay-screen { position: fixed; inset: 0; background: rgba(11,20,26,0.95); z-index: 3000; display: flex; align-items: center; justify-content: center; text-align: center; }
-.call-avatar-circle { width: 80px; height: 80px; border-radius: 50%; margin: 0 auto 1.5rem; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; color: #fff; }
-.btn-call-hangup { background: #ea4335; color: #fff; border: none; padding: 0.7rem 1.75rem; border-radius: 30px; font-weight: 700; cursor: pointer; margin-top: 1.5rem; }
-.image-preview-full { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 4000; display: flex; align-items: center; justify-content: center; }
-.image-preview-full img { max-width: 95%; max-height: 95%; }
-
-/* Mobile */
-@media (max-width: 768px) {
-  .chat-sidebar { width: 100%; }
-  .chat-window { position: absolute; inset: 0; display: none; }
-  .chat-main.contact-selected .chat-window { display: flex; }
-  .btn-back-mobile { display: block; }
-  .message-bubble { max-width: 85%; }
+.msg-bubble-premium.is-call-log { 
+  background: rgba(255,255,255,0.05) !important; 
+  color: #8696a0 !important; 
+  font-size: 0.85rem; 
+  font-style: italic; 
+  border: 1px dashed rgba(255,255,255,0.1) !important; 
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-.getlynkid-header-inner { display: flex; align-items: center; justify-content: space-between; width: 100%; }
-.header-title { font-size: 0.95rem; color: #00a884; font-weight: 700; margin: 0; }
-.user-info { display: flex; align-items: center; gap: 0.4rem; }
-.online-dot { width: 7px; height: 7px; background: #3b82f6; border-radius: 50%; }
-.online-dot.syncing { background: #00a884; animation: pulse 1.5s infinite; }
-@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
-.user-badge { font-weight: 600; font-size: 0.8rem; color: #fff; }
-.btn-logout { background: transparent; border: none; color: #8696a0; cursor: pointer; padding: 0.2rem; display: flex; align-items: center; }
+.msg-text-content { font-size: 0.95rem; line-height: 1.5; white-space: pre-wrap; font-weight: 400; }
+.msg-footer-meta { display: flex; justify-content: flex-end; align-items: center; gap: 0.4rem; margin-top: 0.5rem; opacity: 0.5; font-size: 0.65rem; font-weight: 700; }
 
-.text-truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.text-600 { font-weight: 600; }
+/* Input Block */
+.viewport-controls { padding: 1.5rem; background: #202c33; z-index: 10; padding-bottom: calc(1.5rem + env(safe-area-inset-bottom)); border-top: 1px solid rgba(255,255,255,0.03); }
+.controls-inner { display: flex; align-items: center; gap: 1rem; max-width: 1000px; margin: 0 auto; }
+.btn-attach { background: transparent; border: none; color: #00a884; cursor: pointer; transition: 0.2s; }
+.composer-box { flex: 1; background: #2a3942; border-radius: 20px; padding: 0 1.25rem; border: 1px solid transparent; }
+.composer-box:focus-within { border-color: #00a884; background: #32444f; }
+.composer-input { width: 100%; height: 50px; background: transparent; border: none; color: #fff; outline: none; font-size: 1rem; }
+.btn-send-neon { width: 50px; height: 50px; background: #00a884; color: #fff; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 8px 20px rgba(0, 168, 132, 0.4); transition: 0.3s; }
+.btn-send-neon:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0, 168, 132, 0.5); }
+.btn-send-neon:disabled { opacity: 0.2; transform: scale(0.95); }
+
+/* Center Placeholder */
+.viewport-placeholder { flex: 1; display: flex; align-items: center; justify-content: center; background: #090e11; padding: 2rem; min-height: 0; }
+.placeholder-content { text-align: center; max-width: 450px; }
+.shield-orb-large { position: relative; width: 120px; height: 120px; margin: 0 auto 2.5rem; display: flex; align-items: center; justify-content: center; }
+.shield-ripple { position: absolute; inset: -15px; border: 2px solid rgba(0, 168, 132, 0.1); border-radius: 50%; }
+.placeholder-title { font-size: 1.8rem; font-weight: 800; color: #fff; letter-spacing: 0.1em; margin-bottom: 1rem; }
+.placeholder-desc { color: #8696a0; font-size: 1rem; line-height: 1.6; margin-bottom: 2.5rem; font-weight: 500; }
+.btn-action-primary { height: 54px; background: #00a884; color: #fff; border: none; padding: 0 2rem; border-radius: 20px; font-weight: 800; cursor: pointer; box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
+
+/* Colors/Status */
+.confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); z-index: 5000; display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+.confirm-card-premium { background: #222e35; padding: 3rem 2rem; border-radius: 32px; text-align: center; max-width: 320px; border: 1px solid rgba(255,255,255,0.05); }
+.exit-icon { font-size: 3rem; margin-bottom: 1rem; }
+.confirm-actions-row { display: flex; gap: 1rem; margin-top: 2rem; }
+.btn-ghost { flex: 1; height: 50px; background: #2a3942; border: none; color: #fff; border-radius: 16px; font-weight: 700; cursor: pointer; }
+.btn-danger-shiny { flex: 1; height: 50px; background: #f43f5e; color: #fff; border: none; border-radius: 16px; font-weight: 800; cursor: pointer; box-shadow: 0 5px 15px rgba(244, 63, 94, 0.3); }
+
+/* Modals */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.modal-window-premium { background: #222e35; width: 100%; max-width: 400px; border-radius: 32px; overflow: hidden; box-shadow: 0 30px 60px rgba(0,0,0,0.6); display: flex; flex-direction: column; max-height: 90vh; }
+.modal-head { padding: 1.5rem 2rem; border-bottom: 1px solid rgba(255,255,255,0.03); display: flex; justify-content: space-between; align-items: center; }
+.modal-body-premium { padding: 1.5rem 2rem; overflow-y: auto; flex: 1; }
+.user-suggestions-box { max-height: 300px; overflow-y: auto; background: rgba(0,0,0,0.15); border-radius: 18px; border: 1px solid rgba(255,255,255,0.03); }
+.suggest-row { display: flex; align-items: center; gap: 1rem; padding: 1rem; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.01); transition: 0.2s; }
+.suggest-row:hover { background: rgba(255,255,255,0.03); }
+.suggest-avatar { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 800; color: #fff; font-size: 1rem; flex-shrink: 0; }
+.suggest-name { font-weight: 700; color: #fff; font-size: 0.95rem; }
+.suggest-meta { font-size: 0.7rem; color: #8696a0; font-weight: 600; margin-top: 0.1rem; }
+.suggest-arrow { color: #00a884; font-weight: 900; opacity: 0.5; }
+
+.mod-input-wrap { background: #111b21; border-radius: 16px; padding: 0 1.25rem; border: 1px solid rgba(255,255,255,0.05); }
+.mod-input { width: 100%; height: 54px; background: transparent; border: none; color: #fff; font-size: 1rem; outline: none; }
+.mod-hint { font-size: 0.8rem; color: #8696a0; text-align: center; }
+.modal-foot { padding: 0 2rem 2rem; }
+.btn-mod-action { width: 100%; height: 56px; background: #00a884; color: #fff; border: none; border-radius: 16px; font-weight: 800; cursor: pointer; }
+
+@media (max-width: 768px) {
+  .chat-sidebar-premium { width: 100%; }
+  .chat-viewport-premium { position: absolute; inset: 0; display: none; }
+  .chat-main.contact-selected .chat-viewport-premium { display: flex; }
+  .btn-nav-back { display: block; }
+}
+
+.truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hidden { display: none; }
 
-/* Transitions */
-.modal-bounce-enter-active { animation: bounce-in 0.3s; }
-@keyframes bounce-in { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+/* Call UI */
+.call-overlay-premium { position: fixed; inset: 0; background: #090e11; z-index: 9000; display: flex; align-items: center; justify-content: center; }
+.call-canvas { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.remote-v { width: 100%; height: 100%; object-fit: cover; background: #111b21; }
+.local-v-wrap { position: absolute; bottom: 100px; right: 20px; width: 120px; height: 180px; background: #000; border-radius: 16px; overflow: hidden; border: 2px solid rgba(255,255,255,0.1); box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 10; }
+.local-v { width: 100%; height: 100%; object-fit: cover; }
+.call-info { position: absolute; top: 10%; text-align: center; width: 100%; z-index: 5; }
+.c-avatar { width: 100px; height: 100px; border-radius: 30px; margin: 0 auto 1.5rem; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; font-weight: 800; color: #fff; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+.call-info h3 { color: #fff; font-size: 1.8rem; font-weight: 800; margin-bottom: 0.5rem; }
+.status-pulse { color: #00a884; font-weight: 700; letter-spacing: 0.1em; animation: pulse 2s infinite; }
+.call-actions { position: absolute; bottom: 40px; width: 100%; display: flex; justify-content: center; gap: 2rem; z-index: 20; }
+.btn-hangup { width: 70px; height: 70px; background: #f43f5e; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 10px 25px rgba(244, 63, 94, 0.4); transition: 0.2s; }
+.btn-hangup:hover { transform: scale(1.1); background: #e11d48; }
+
+.incoming-call-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+.i-call-card { background: #222e35; width: 100%; max-width: 320px; padding: 3rem 2rem; border-radius: 40px; text-align: center; border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 30px 60px rgba(0,0,0,0.6); }
+.i-avatar { width: 80px; height: 80px; border-radius: 25px; margin: 0 auto 1.5rem; display: flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: 800; color: #fff; }
+.i-actions { display: flex; gap: 1rem; margin-top: 2rem; }
+.btn-decline { flex: 1; height: 54px; background: rgba(244, 63, 94, 0.1); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.2); border-radius: 18px; font-weight: 700; cursor: pointer; }
+.btn-accept { flex: 1; height: 54px; background: #00a884; color: #fff; border: none; border-radius: 18px; font-weight: 800; cursor: pointer; box-shadow: 0 8px 20px rgba(0, 168, 132, 0.3); }
+
+@keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
+
+.t-btn:disabled { opacity: 0.3; cursor: not-allowed; filter: grayscale(1); }
 </style>

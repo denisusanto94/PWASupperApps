@@ -1,0 +1,46 @@
+﻿
+> pwasupperapps@1.0.0 start
+> node index.js
+
+--- Initializing MySQL Schemas ---
+node.exe : 
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" 
+"C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpeci 
+   fied: (:String) [], RemoteExceptio  
+  n
+    + FullyQualifiedErrorId : NativeCo 
+   mmandError
+ 
+D:\Pekerjaan\Freelance\pwa\PWASupperApp
+s\node_modules\levelup\lib\levelup.js:1
+19
+      return callback(new 
+OpenError(err))
+                      ^
+Error [OpenError]: IO error: LockFile D
+:\Pekerjaan\Freelance\pwa\PWASupperApps
+\database\_replicator/LOCK: The 
+process cannot access the file because 
+it is being used by another process.
+
+
+    at D:\Pekerjaan\Freelance\pwa\PWASu
+pperApps\node_modules\levelup\lib\level
+up.js:119:23
+    at D:\Pekerjaan\Freelance\pwa\PWASu
+pperApps\node_modules\abstract-leveldow
+n\abstract-leveldown.js:38:14
+    at D:\Pekerjaan\Freelance\pwa\PWASu
+pperApps\node_modules\deferred-leveldow
+n\deferred-leveldown.js:31:21
+    at D:\Pekerjaan\Freelance\pwa\PWASu
+pperApps\node_modules\abstract-leveldow
+n\abstract-leveldown.js:38:14 {
+  [cause]: undefined
+}
+
+Node.js v24.13.0
