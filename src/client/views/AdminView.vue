@@ -51,29 +51,51 @@
             <tr v-for="user in filteredUsers" :key="user.id">
               <td>
                 <div class="user-cell">
-                  <div class="avatar" :style="{ background: getRandomGradient(user.email) }">
-                    {{ user.full_name?.charAt(0) || 'U' }}
+                  <div class="avatar-wrapper">
+                    <div class="avatar" :style="{ background: getRandomGradient(user.email) }">
+                      {{ user.full_name?.charAt(0) || 'U' }}
+                    </div>
+                    <div class="session-dot" :class="{ active: user.active_sessions > 0 }" :title="user.active_sessions > 0 ? 'Sesi Aktif' : 'Tidak Ada Sesi'"></div>
                   </div>
                   <div class="user-meta">
                     <div class="user-name">{{ user.full_name }}</div>
-                    <div class="user-email">{{ user.email }}</div>
+                    <div class="user-email">
+                      {{ user.email }}
+                    </div>
                   </div>
                 </div>
               </td>
               <td>
                 <span class="badge" :class="user.role">
-                  {{ user.role === 'admin' ? '🛡️ Admin' : '👤 User' }}
+                  {{ user.role === 'superadmin' ? '👑 Superadmin' : (user.role === 'admin' ? '🛡️ Admin' : '👤 User') }}
                 </span>
               </td>
               <td>{{ new Date(user.created_at).toLocaleDateString() }}</td>
               <td class="text-right">
-                <button 
-                  v-if="user.email !== 'admin@gmail.com'" 
-                  class="action-btn delete" 
-                  @click="confirmDelete(user)"
-                >
-                  Delete
-                </button>
+                <div class="flex items-center justify-end gap-3">
+                  <div 
+                    class="status-indicator-pill" 
+                    :class="{ active: user.active_sessions > 0 }"
+                    :title="user.active_sessions > 0 ? 'Sesi Aktif' : 'Tidak Ada Sesi'"
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" class="mr-1 inline-block"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    {{ user.active_sessions > 0 ? 'ONLINE' : 'OFFLINE' }}
+                  </div>
+                  <button 
+                    class="action-btn session-reset" 
+                    @click="resetSession(user)"
+                    title="Reset Sesi / Logout Paksa"
+                  >
+                    Reset Sesi
+                  </button>
+                  <button 
+                    v-if="user.email !== 'admin@gmail.com'" 
+                    class="action-btn delete" 
+                    @click="confirmDelete(user)"
+                  >
+                    Delete
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -107,6 +129,7 @@
               <select v-model="newUser.role">
                 <option value="user">Standard User</option>
                 <option value="admin">Administrator</option>
+                <option value="superadmin">Superadmin</option>
               </select>
             </div>
             <div class="modal-footer">
@@ -192,6 +215,20 @@ const confirmDelete = async (user) => {
     }
   } catch (err) {
     showToast('Gagal menghapus user', 'error');
+  }
+};
+
+const resetSession = async (user) => {
+  if (!confirm(`Tutup semua sesi aktif untuk user ${user.full_name}?`)) return;
+  try {
+    const res = await apiFetch(`/api/admin/sessions/${user.id}`, { method: 'DELETE' });
+    if (res.ok) {
+      showToast('Sesi user berhasil direset', 'success');
+    } else {
+      throw new Error('Gagal mereset sesi');
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
   }
 };
 
@@ -366,7 +403,29 @@ onMounted(loadUsers);
 .user-cell {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 1.25rem;
+}
+
+.avatar-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.session-dot {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #64748b;
+  border: 3px solid #111b21;
+  transition: 0.3s;
+}
+
+.session-dot.active {
+  background: #00a884;
+  box-shadow: 0 0 10px rgba(0, 168, 132, 0.5);
 }
 
 .avatar {
@@ -403,9 +462,29 @@ onMounted(loadUsers);
   color: #10b981;
 }
 
+.badge.superadmin {
+  background: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+
 .badge.user {
   background: rgba(59, 130, 246, 0.1);
   color: #3b82f6;
+}
+
+.status-indicator-pill {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  background: rgba(148, 163, 184, 0.1);
+  color: #94a3b8;
+  letter-spacing: 0.05em;
+}
+
+.status-indicator-pill.active {
+  background: rgba(0, 168, 132, 0.1);
+  color: #00a884;
 }
 
 .action-btn {
@@ -426,6 +505,17 @@ onMounted(loadUsers);
 
 .action-btn.delete:hover {
   background: #f43f5e;
+  color: white;
+}
+
+.action-btn.session-reset {
+  background: rgba(245, 158, 11, 0.05);
+  color: #f59e0b;
+  border-color: rgba(245, 158, 11, 0.1);
+}
+
+.action-btn.session-reset:hover {
+  background: #f59e0b;
   color: white;
 }
 

@@ -89,7 +89,7 @@ const authenticate = async (req, res, next) => {
 };
 
 const isAdmin = (req, res, next) => {
-  if (req.user && req.user.role === 'admin') {
+  if (req.user && (req.user.role === 'admin' || req.user.role === 'superadmin')) {
     return next();
   }
   res.status(403).json({ error: 'Admin access required' });
@@ -142,13 +142,23 @@ app.post('/api/auth/login', async (req, res) => {
     const user = users[0];
     if (user.password !== password) return res.status(401).json({ error: 'Password salah' });
     
-    // Check if user already has an active session
-    const [activeSessions] = await mysqlPool.query(
-      `SELECT id FROM sessions_id WHERE user_id = ? AND expires_at > CURRENT_TIMESTAMP`,
-      [user.id]
-    );
-    if (activeSessions.length > 0) {
-      return res.status(403).json({ error: 'User sudah login. Tutup sesi di perangkat/browser lain terlebih dahulu.' });
+    // Get user roles
+    const [roles] = await mysqlPool.query(`
+      SELECT r.name FROM roles r 
+      JOIN users_has_roles uhr ON r.id = uhr.role_id 
+      WHERE uhr.user_id = ?
+    `, [user.id]);
+    const userRole = roles.length > 0 ? roles[0].name : 'user';
+
+    // Check if user already has an active session (skip for admin/superadmin)
+    if (userRole !== 'admin' && userRole !== 'superadmin') {
+      const [activeSessions] = await mysqlPool.query(
+        `SELECT id FROM sessions_id WHERE user_id = ? AND expires_at > CURRENT_TIMESTAMP`,
+        [user.id]
+      );
+      if (activeSessions.length > 0) {
+        return res.status(403).json({ error: 'User sudah login. Tutup sesi di perangkat/browser lain terlebih dahulu.' });
+      }
     }
     
     const sessionId = crypto.randomUUID();
@@ -156,19 +166,13 @@ app.post('/api/auth/login', async (req, res) => {
     
     await mysqlPool.query(`INSERT INTO sessions_id (id, user_id, expires_at) VALUES (?, ?, ?)`, [sessionId, user.id, expiresAt]);
     
-    const [roles] = await mysqlPool.query(`
-      SELECT r.name FROM roles r 
-      JOIN users_has_roles uhr ON r.id = uhr.role_id 
-      WHERE uhr.user_id = ?
-    `, [user.id]);
-    
     res.json({ 
       sessionId, 
       user: { 
         id: user.id, 
         email: user.email, 
         full_name: user.full_name, 
-        role: roles.length > 0 ? roles[0].name : 'user' 
+        role: userRole 
       } 
     });
   } catch (err) {
@@ -231,7 +235,13 @@ app.get('/api/users', authenticate, async (req, res) => {
 app.get('/api/admin/users', authenticate, isAdmin, async (req, res) => {
   try {
     const [rows] = await mysqlPool.query(`
-      SELECT u.id, u.email, u.full_name, u.created_at, r.name as role
+      SELECT 
+        u.id, 
+        u.email, 
+        u.full_name, 
+        u.created_at, 
+        r.name as role,
+        (SELECT COUNT(*) FROM sessions_id WHERE user_id = u.id AND expires_at > CURRENT_TIMESTAMP) as active_sessions
       FROM users u
       LEFT JOIN users_has_roles uhr ON u.id = uhr.user_id
       LEFT JOIN roles r ON uhr.role_id = r.id
@@ -260,6 +270,13 @@ app.delete('/api/admin/users/:id', authenticate, isAdmin, async (req, res) => {
   try {
     await mysqlPool.query(`DELETE FROM users WHERE id = ?`, [req.params.id]);
     res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/admin/sessions/:userId', authenticate, isAdmin, async (req, res) => {
+  try {
+    await mysqlPool.query(`DELETE FROM sessions_id WHERE user_id = ?`, [req.params.userId]);
+    res.json({ ok: true, message: 'Sessions cleared' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

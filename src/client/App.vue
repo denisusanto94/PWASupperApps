@@ -58,9 +58,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, onBeforeUnmount, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { toastState } from './toast.js';
+import { toastState, showToast } from './toast.js';
 import { authState, setAuth, apiFetch } from './db.js';
 
 const route = useRoute();
@@ -107,6 +107,39 @@ const handleLogout = async () => {
   setAuth(null, null, false);
   if (route.path !== '/') router.push('/');
 };
+
+// --- IDLE AUTO-LOGOUT (30 MINUTES) ---
+let idleTimer = null;
+const IDLE_TIMEOUT = 30 * 60 * 1000;
+const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
+
+const resetIdleTimer = () => {
+  if (idleTimer) clearTimeout(idleTimer);
+  if (authState.user) {
+    idleTimer = setTimeout(() => {
+      showToast('Sesi ditutup karena idle selama 30 menit', 'info');
+      handleLogout();
+    }, IDLE_TIMEOUT);
+  }
+};
+
+onMounted(() => {
+  checkVersion();
+  setInterval(checkVersion, 5 * 60 * 1000);
+  
+  activityEvents.forEach(ev => window.addEventListener(ev, resetIdleTimer));
+  resetIdleTimer();
+});
+
+onBeforeUnmount(() => {
+  activityEvents.forEach(ev => window.removeEventListener(ev, resetIdleTimer));
+  if (idleTimer) clearTimeout(idleTimer);
+});
+
+watch(() => authState.user, (newVal) => {
+  if (newVal) resetIdleTimer();
+  else if (idleTimer) clearTimeout(idleTimer);
+});
 </script>
 
 <style>
