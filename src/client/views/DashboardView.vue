@@ -1,5 +1,17 @@
 <template>
-  <div class="app">
+  <div v-if="IS_MAINTENANCE" class="maintenance-view-container">
+    <div class="maintenance-card">
+      <div class="maintenance-icon">🛠️</div>
+      <h1 class="maintenance-title">WhatsApp Blaster</h1>
+      <h2 class="maintenance-subtitle">Under Maintenance</h2>
+      <p class="maintenance-text">
+        Modul WhatsApp Blaster sedang dalam pemeliharaan sistem untuk meningkatkan stabilitas koneksi. 
+        Mohon kembali lagi beberapa saat lagi.
+      </p>
+      <router-link to="/" class="btn btn-primary">Kembali ke Home</router-link>
+    </div>
+  </div>
+  <div v-else class="app">
 
 
     <Transition name="modal">
@@ -386,6 +398,8 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { showToast } from '../toast.js';
+
+const IS_MAINTENANCE = ref(true);
 import {
   apiFetch,
   startSync,
@@ -1813,5 +1827,53 @@ body {
   color: var(--muted);
   font-size: 0.8rem;
   text-align: center;
+}
+.maintenance-view-container {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #020617;
+  padding: 1.5rem;
+  z-index: 1000;
+}
+
+.maintenance-card {
+  max-width: 500px;
+  width: 100%;
+  background: #1e293b;
+  padding: 3rem 2rem;
+  border-radius: 32px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 50px 100px -20px rgba(0,0,0,0.5);
+}
+
+.maintenance-icon {
+  font-size: 4rem;
+  margin-bottom: 1.5rem;
+}
+
+.maintenance-title {
+  color: white;
+  font-size: 2.5rem;
+  font-weight: 800;
+  margin: 0;
+  margin-bottom: 0.5rem;
+}
+
+.maintenance-subtitle {
+  color: #f59e0b;
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 1.5rem;
+}
+
+.maintenance-text {
+  color: #94a3b8;
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: 2rem;
 }
 </style>

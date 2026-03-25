@@ -379,7 +379,16 @@ app.delete('/api/modules/:module/:id', authenticate, async (req, res) => {
   const tableName = MODNAME_TO_TABLE[req.params.module];
   if (!tableName) return res.status(404).json({ error: 'Module not found' });
   try {
-    const [result] = await mysqlPool.query(`DELETE FROM ${tableName} WHERE id = ? AND (user_id = ? OR is_guest = 1)`, [req.params.id, req.user.id]);
+    let query, params;
+    if (tableName === 'instant_chat') {
+      // Allow deletion if requester is sender OR recipient
+      query = `DELETE FROM ${tableName} WHERE id = ? AND (user_id = ? OR JSON_UNQUOTE(JSON_EXTRACT(data, '$.to')) = ?)`;
+      params = [req.params.id, req.user.id, req.user.email];
+    } else {
+      query = `DELETE FROM ${tableName} WHERE id = ? AND (user_id = ? OR is_guest = 1)`;
+      params = [req.params.id, req.user.id];
+    }
+    await mysqlPool.query(query, params);
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

@@ -476,10 +476,15 @@ const handleRtcSignal = async (doc) => {
   if (doc.data.to !== currentUser.value) return;
   const { from, data } = doc.data;
   
+  // 1. Stale Check (ignore signals older than 60s)
+  const isStale = (Date.now() - (data.timestamp || doc.updated_at)) > 60000;
+  
   // Important: Delete signal after reading so it doesn't double-trigger
   try {
      await apiFetch(`/api/modules/instant_chat/${doc.id}`, { method: 'DELETE' });
   } catch(e) {}
+  
+  if (isStale) return; // Silent discard
 
   if (data.type === 'offer') {
     if (activeCall.value || incomingCall.value) return;
@@ -607,8 +612,11 @@ const refreshUI = async () => {
             return;
         }
         
-        // Handle RTC Signals (Calling)
-        const signals = results.filter(r => r && r.data && r.data.type === 'rtc_signal' && r.data.to === currentUser.value);
+        // Handle RTC Signals (Calling) - Sort ASC by timestamp to process in sequence
+        const signals = results
+          .filter(r => r && r.data && r.data.type === 'rtc_signal' && r.data.to === currentUser.value)
+          .sort((a,b) => (a.data.timestamp || 0) - (b.data.timestamp || 0));
+        
         for (const s of signals) await handleRtcSignal(s);
 
         // Group messages for Chat List
