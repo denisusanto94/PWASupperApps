@@ -19,7 +19,6 @@
         <h1 class="header-title">WhatsApp Blaster</h1>
         <div class="header-actions">
           <span class="header-tagline">WhatsApp Blaster PWA</span>
-          <span v-if="sessionId !== 'main'" class="badge badge-session">Session: {{ sessionId }}</span>
         </div>
       </div>
 
@@ -28,7 +27,11 @@
     <section class="card connection-card">
       <h2>Status WhatsApp</h2>
       <div v-if="connectionStatus === 'connecting'" class="status connecting">
-        Menghubungkan…
+        <p>Menghubungkan…</p>
+        <div v-if="qrTimeout" class="timeout-fallback">
+          <p class="text-xs opacity-70 mb-2">QR Code belum muncul? Coba refresh.</p>
+          <button @click="refreshPage" class="btn btn-primary btn-sm">Refresh Aplikasi</button>
+        </div>
       </div>
       <div v-else-if="connectionStatus === 'qr'" class="status qr">
         <p>Scan QR dengan WhatsApp</p>
@@ -126,7 +129,6 @@
           type="search"
           placeholder="Cari nama atau nomor..."
           class="contact-search-input"
-          autocomplete="off"
         />
       </div>
 
@@ -385,6 +387,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { showToast } from '../toast.js';
 import {
+  apiFetch,
   startSync,
   addOutbox,
   getOutboxDocs,
@@ -803,28 +806,41 @@ function formatTime(created, sent) {
   return d.toLocaleString('id-ID');
 }
 
-const sessionId = computed(() => {
-  const params = new URLSearchParams(window.location.search);
-  return params.get('session') || 'main';
-});
+const sessionId = ref('main');
 
 async function loadConnection() {
-  // Use API first for faster initial state
   try {
-    const res = await fetch(`/api/whatsapp/status?id=${sessionId.value}`);
+    const res = await apiFetch(`/api/whatsapp/status`);
     if (res.ok) {
       connection.value = await res.json();
     }
   } catch (e) {
-    console.warn('Gagal memuat status via API, mencoba PouchDB...', e);
-  }
-  
-  // Fallback to local PouchDB if still null or to stay synced
-  if (!connection.value) {
-    const doc = await getConnectionDoc();
-    if (doc) connection.value = doc;
+    console.warn('Gagal memuat status via API', e);
   }
 }
+
+const qrTimeout = ref(false);
+let qrTimer = null;
+
+const refreshPage = () => { window.location.reload(); };
+
+watch([connectionStatus, connectionQr], ([newStatus, newQr]) => {
+  if (newStatus === 'connecting' && !newQr) {
+    if (!qrTimer) {
+      qrTimer = setTimeout(() => {
+        if (connectionStatus.value === 'connecting' && !connectionQr.value) {
+            qrTimeout.value = true;
+        }
+      }, 10000);
+    }
+  } else {
+    if (qrTimer) {
+      clearTimeout(qrTimer);
+      qrTimer = null;
+    }
+    qrTimeout.value = false;
+  }
+}, { immediate: true });
 
 
 async function loadOutbox() {
@@ -874,8 +890,7 @@ async function requestNewQr() {
   try {
     const res = await fetch('/api/whatsapp/restart', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: sessionId.value })
+      headers: { 'Content-Type': 'application/json' }
     });
     if (!res.ok) throw new Error((await res.json()).error || res.statusText);
     await loadConnection();
@@ -911,7 +926,7 @@ function confirmBulkDeleteHistory() {
 
 async function deleteOneHistory(row) {
   try {
-    await removeOutbox(row);
+    await removeOutbox(row._id);
     await loadOutbox();
     historySelectedIds.value = historySelectedIds.value.filter((id) => id !== row._id);
     showToast('Pesan dihapus dari riwayat.', 'success');
@@ -926,7 +941,7 @@ async function bulkDeleteHistory() {
   const list = outboxList.value.filter((r) => ids.includes(r._id));
   try {
     for (const doc of list) {
-      await removeOutbox(doc);
+      await removeOutbox(doc._id);
     }
     historySelectedIds.value = [];
     await loadOutbox();

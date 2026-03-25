@@ -28,10 +28,6 @@
     </div>
 
     <div v-else class="wedding-content">
-      <div class="user-meta-bar">
-        <span>Halo, <strong>@{{ currentUser }}</strong></span>
-        <button @click="logout" class="btn-logout">Logout</button>
-      </div>
 
       <div class="wedding-hero">
       <div class="hero-ornament top" aria-hidden="true">✦ ✦ ✦</div>
@@ -262,69 +258,49 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import PouchDB from 'pouchdb-browser';
-import { WEDDING_DB_NAME, WEDDING_USERS_DB_NAME, syncModule } from '../db.js';
+import { 
+  authState,
+  getModuleData, 
+  saveModuleData,
+  WEDDING_DB_NAME
+} from '../db.js';
 import { showToast } from '../toast.js';
 
-const db = new PouchDB(WEDDING_DB_NAME);
-const userDb = new PouchDB(WEDDING_USERS_DB_NAME);
+const saving = ref(false);
 
-// Auth State
-const currentUser = ref(localStorage.getItem('wedding_username') || null);
-const isRegisterMode = ref(false);
+// Use Global Auth
+const currentUser = computed(() => authState.user?.full_name || authState.user?.email || null);
+const isGuest = computed(() => authState.isGuest);
 const authLoading = ref(false);
-const authForm = reactive({ username: '', password: '' });
-
-const handleAuth = async () => {
-  const { username, password } = authForm;
-  if (!username.trim() || !password.trim()) return;
-  authLoading.value = true;
-  try {
-    if (isRegisterMode.value) {
-      try {
-        await userDb.get(username);
-        showToast('Username sudah terpakai.', 'error');
-      } catch (err) {
-        if (err.status === 404) {
-          await userDb.put({ _id: username, password, createdAt: new Date().toISOString() });
-          showToast('Berhasil daftar! Silakan masuk.');
-          isRegisterMode.value = false;
-        } else throw err;
-      }
-    } else {
-      try {
-        const userDoc = await userDb.get(username);
-        if (userDoc.password === password) {
-          currentUser.value = username;
-          localStorage.setItem('wedding_username', username);
-          await loadData();
-        } else {
-          showToast('Password salah.', 'error');
-        }
-      } catch (err) {
-        if (err.status === 404) showToast('User tidak ditemukan.', 'error');
-        else throw err;
-      }
-    }
-  } catch (err) {
-    console.error('Auth error:', err);
-    showToast('Gagal autentikasi.', 'error');
-  } finally {
-    authLoading.value = false;
-  }
-};
-
-const logout = () => {
-  currentUser.value = null;
-  localStorage.removeItem('wedding_username');
-  resetForm();
-};
 
 const resetForm = () => {
-  form.priaFull = '';
-  form.priaNick = '';
-  // ... reseting other form fields if needed or just reload
-  location.reload(); 
+  Object.assign(form, {
+    namaMempelaiPria: '',
+    namaMempelaiWanita: '',
+    orangTuaAyahPria: '',
+    orangTuaIbuPria: '',
+    waliPria: '',
+    orangTuaAyahWanita: '',
+    orangTuaIbuWanita: '',
+    waliWanita: '',
+    sosialMediaPria: '',
+    sosialMediaWanita: '',
+    kataSambutan: '',
+    tanggalAkad: '',
+    jamAkad: '',
+    lokasiAkad: '',
+    alamatAkad: '',
+    mapUrlAkad: '',
+    tanggalResepsi: '',
+    jamResepsi: '',
+    lokasiResepsi: '',
+    alamatResepsi: '',
+    mapUrlResepsi: '',
+    youtubeLiveUrl: '',
+    eAngpaoQris: null,
+    latarLagu: null,
+    gallery: [],
+  });
 };
 
 const selectedTemplateId = ref('classic');
@@ -438,16 +414,20 @@ function fileToBase64(file) {
   });
 }
 
-const getDocId = () => `wedding_${currentUser.value}`;
+const currentDocId = ref(null);
 
 const loadData = async () => {
   if (!currentUser.value) return;
   try {
-    const doc = await db.get(getDocId());
-    if (doc.data) Object.assign(form, doc.data);
-    selectedTemplateId.value = doc.templateId || 'classic';
+    const results = await getModuleData(WEDDING_DB_NAME);
+    if (results.length > 0) {
+      const doc = results[0];
+      currentDocId.value = doc.id;
+      if (doc.data) Object.assign(form, doc.data);
+      if (doc.data.templateId) selectedTemplateId.value = doc.data.templateId;
+    }
   } catch (err) {
-    if (err.status !== 404) console.warn('Wedding load error:', err);
+    console.warn('Wedding load error:', err);
   }
 };
 
@@ -455,19 +435,14 @@ const saveData = async () => {
   if (!currentUser.value) return;
   saving.value = true;
   try {
-    let doc;
-    try {
-      doc = await db.get(getDocId());
-    } catch (e) {
-      doc = { _id: getDocId(), type: 'wedding_data', owner: currentUser.value };
-    }
-    // Don't save File objects to PouchDB
     const { latarLaguFile, galleryFiles, fotoPriaFile, fotoWanitaFile, eAngpaoQrisFile, ...dataToSave } = form;
-    doc.data = JSON.parse(JSON.stringify(dataToSave));
-    doc.templateId = selectedTemplateId.value;
-    doc.updatedAt = new Date().toISOString();
-    await db.put(doc);
-    showToast('Progress berhasil disimpan ke database!');
+    // Add template ID to data
+    dataToSave.templateId = selectedTemplateId.value;
+    
+    const result = await saveModuleData(WEDDING_DB_NAME, dataToSave, currentDocId.value);
+    if (result.ok && result.id) currentDocId.value = result.id;
+    
+    showToast('Progress berhasil disinkron ke database!');
   } catch (err) {
     console.error('Save wedding error:', err);
     showToast('Gagal menyimpan.', 'error');
@@ -487,7 +462,7 @@ function scrollCarousel(dir) {
 }
 
 async function goPreview() {
-  await saveData(); // Save before preview to ensure sync
+  await saveData(); 
   const payload = {
     ...form,
     templateId: selectedTemplateId.value,
@@ -506,9 +481,8 @@ async function goPreview() {
 
 onMounted(() => {
   if (currentUser.value) loadData();
-  syncModule(db, WEDDING_DB_NAME);
-  syncModule(userDb, WEDDING_USERS_DB_NAME);
 });
+
 </script>
 
 <style scoped>
@@ -1031,6 +1005,45 @@ onMounted(() => {
   cursor: pointer;
   font-size: 0.85rem;
   text-decoration: underline;
+}
+
+.user-meta-bar-minimal {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.25rem 0.5rem 0.25rem 0.85rem;
+  border-radius: 50px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.user-greeting {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.user-greeting strong {
+  color: #fff;
+}
+
+.btn-logout-minimal {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-logout-minimal:hover {
+  background: #ef4444;
+  color: #fff;
+  transform: scale(1.1);
 }
 
 .user-meta-bar {

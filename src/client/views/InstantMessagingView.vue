@@ -8,13 +8,6 @@
            </div>
            <h1 class="header-vault-title">Instant Chat</h1>
         </div>
-        
-        <div v-if="isLoggedIn" class="header-profile-section">
-          <div class="sync-status" :class="{ is_active: !isSyncing }"></div>
-          <button @click="showLogoutConfirm = true" class="premium-avatar-btn" :style="{ background: getAvatarColor(currentUser) }">
-            {{ currentUser[0].toUpperCase() }}
-          </button>
-        </div>
       </div>
     </Teleport>
 
@@ -304,23 +297,20 @@
 
 <script setup>
 import { ref, onMounted, computed, nextTick, watch, onBeforeUnmount } from 'vue';
-import PouchDB from 'pouchdb-browser';
-import { CHAT_DB_NAME, CHAT_USERS_DB_NAME, ONLINE_CHAT_DB_NAME, syncModule } from '../db.js';
+import { 
+  authState,
+  apiFetch,
+  getModuleData, 
+  saveModuleData,
+  INSTANT_CHAT_DB_NAME
+} from '../db.js';
 import { showToast } from '../toast.js';
 
-// DB Config
-const db = new PouchDB(CHAT_DB_NAME);
-const userDb = new PouchDB(CHAT_USERS_DB_NAME);
-const onlineDb = new PouchDB(ONLINE_CHAT_DB_NAME);
-
 // State
-const currentUser = ref(localStorage.getItem('chat_username') || null);
-const isLoggedIn = computed(() => !!currentUser.value);
+const currentUser = computed(() => authState.user?.email || null);
+const isLoggedIn = computed(() => !!authState.user);
 const isSyncing = ref(false);
-const usernameInput = ref('');
-const passwordInput = ref('');
-const isRegisterMode = ref(false);
-const authLoading = ref(false);
+
 const selectedContact = ref(null);
 const messages = ref([]);
 const newMessage = ref('');
@@ -328,6 +318,7 @@ const chatList = ref([]);
 const allRegisteredUsers = ref([]);
 const contactSearchTerm = ref('');
 const showNewChatModal = ref(false);
+const loading = ref(false);
 const newChatUsername = ref('');
 const previewImage = ref(null);
 const messageBox = ref(null);
@@ -348,9 +339,13 @@ let peerConnection = null;
 let localStream = null;
 const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun2.l.google.com:19302' }] };
 
-const SECRET_KEY = 'vault_core_v7.3';
+const SECRET_KEY = 'vault_core_v7.3_mysql';
 
-// Base64 Helpers
+// Polling intervals
+let pollingInterval = null;
+let onlineInterval = null;
+
+// --- UTILS ---
 function uint8ArrayToBase64(bytes) {
   let binary = '';
   const len = bytes.byteLength;
@@ -363,37 +358,6 @@ function base64ToUint8Array(base64) {
   const bytes = new Uint8Array(len);
   for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
   return bytes;
-}
-
-// Encryption utils
-async function deriveKey(me, other) {
-  const enc = new TextEncoder();
-  const pair = [me, other].sort().join(':');
-  const keyMat = await window.crypto.subtle.importKey('raw', enc.encode(SECRET_KEY + pair), 'PBKDF2', false, ['deriveKey']);
-  return window.crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: enc.encode('shared-session-v7.3'), iterations: 100000, hash: 'SHA-256' }, 
-    keyMat, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
-  );
-}
-
-async function encrypt(text, to) {
-  if (!text) return null;
-  const enc = new TextEncoder();
-  const iv = window.crypto.getRandomValues(new Uint8Array(12));
-  const key = await deriveKey(currentUser.value, to);
-  const encrypted = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(text));
-  return { data: uint8ArrayToBase64(new Uint8Array(encrypted)), iv: uint8ArrayToBase64(iv) };
-}
-
-async function decrypt(obj, other) {
-  if (!obj || !obj.data || !obj.iv || !currentUser.value) return '';
-  const key = await deriveKey(currentUser.value, other);
-  try {
-    const iv = base64ToUint8Array(obj.iv);
-    const data = base64ToUint8Array(obj.data);
-    const dec = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
-    return new TextDecoder().decode(dec);
-  } catch (e) { return ''; }
 }
 
 const getAvatarColor = (name) => {
@@ -409,181 +373,125 @@ const formatTimeShort = (ts) => {
   return d.toDateString() === new Date().toDateString() ? formatTime(ts) : d.toLocaleDateString([], { day: '2-digit', month: '2-digit' });
 };
 
-// Online Heartbeat
-let heartbeatInterval = null;
-const pingOnline = async () => {
-  if (!currentUser.value) return;
+// --- ENCRYPTION ---
+async function getKey(other) {
+  const enc = new TextEncoder();
+  const sorted = [currentUser.value, other].sort();
+  const pair = sorted.join(':');
+  const keyMat = await window.crypto.subtle.importKey('raw', enc.encode(SECRET_KEY + pair), 'PBKDF2', false, ['deriveKey']);
+  return window.crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: enc.encode('shared-session-v7.3'), iterations: 100000, hash: 'SHA-256' }, 
+    keyMat, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+  );
+}
+
+async function encrypt(text, other) {
+  if (!text) return null;
+  const enc = new TextEncoder();
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+  const key = await getKey(other);
+  const encrypted = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(text));
+  return { d: uint8ArrayToBase64(new Uint8Array(encrypted)), i: uint8ArrayToBase64(iv) };
+}
+
+async function decrypt(obj, otherUser) {
+  if (!obj || !obj.d || !obj.i || !currentUser.value) return '';
+  const key = await getKey(otherUser);
   try {
-    let doc;
-    try { doc = await onlineDb.get(currentUser.value); } catch (e) { doc = { _id: currentUser.value }; }
-    doc.lastSeen = Date.now();
-    doc.type = 'online_status';
-    await onlineDb.put(doc);
-  } catch (e) { console.error('Heartbeat failed', e); }
+    const iv = base64ToUint8Array(obj.i);
+    const data = base64ToUint8Array(obj.d);
+    const dec = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
+    return new TextDecoder().decode(dec);
+  } catch (e) { return '[Decryption Error]'; }
+}
+
+// --- CORE LOGIC ---
+const pingOnline = async () => {
+    if (!currentUser.value) return;
+    try {
+      await apiFetch('/api/chat/ping', { method: 'POST' });
+    } catch (e) {}
 };
 
 const loadOnlineStatus = async () => {
-  try {
-    const res = await onlineDb.allDocs({ include_docs: true });
-    const map = {};
-    const now = Date.now();
-    res.rows.forEach(r => {
-      if (r.doc.lastSeen > now - 40000) { map[r.id] = true; }
-    });
-    onlineStatusMap.value = map;
-  } catch (e) {}
+    try {
+        const res = await apiFetch('/api/chat/online');
+        const users = await res.json();
+        const map = {};
+        users.forEach(u => {
+            map[u.email] = true;
+        });
+        onlineStatusMap.value = map;
+    } catch (e) {}
 };
 
 const loadAllRoster = async () => {
   try {
-    const res = await userDb.allDocs({ include_docs: true });
-    allRegisteredUsers.value = res.rows.map(r => r.id).filter(id => id !== currentUser.value && !id.startsWith('_design/'));
+    const res = await apiFetch('/api/users');
+    const users = await res.json();
+    allRegisteredUsers.value = users.map(u => u.email).filter(email => email !== currentUser.value);
   } catch (e) {}
 };
 
 const suggestedUsers = computed(() => {
   const q = newChatUsername.value.toLowerCase().trim();
-  if (!q) return allRegisteredUsers.value.slice(0, 10);
-  return allRegisteredUsers.value.filter(u => u.toLowerCase().includes(q));
+  const list = allRegisteredUsers.value;
+  if (!q) return list.slice(0, 10);
+  return list.filter(u => u.toLowerCase().includes(q));
 });
 
 const selectSuggestedUser = (user) => { newChatUsername.value = user; startNewChat(); };
 
-const AUTH_KEY_TAG = 'secret_vault_auth_v7.3';
+const filteredChatList = computed(() => {
+  const q = contactSearchTerm.value.toLowerCase().trim();
+  const list = chatList.value.map(c => ({ ...c, isOnline: !!onlineStatusMap.value[c.username] }));
+  if (!q) return list;
+  return list.filter(c => c.username.toLowerCase().includes(q));
+});
 
-async function deriveAuthKey(user) {
-  const enc = new TextEncoder();
-  const keyMat = await window.crypto.subtle.importKey('raw', enc.encode(AUTH_KEY_TAG + user), 'PBKDF2', false, ['deriveKey']);
-  return window.crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt: enc.encode('auth-salt-v7.3'), iterations: 50000, hash: 'SHA-256' }, 
-    keyMat, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
-  );
-}
+const startPolling = () => {
+    if (pollingInterval) clearInterval(pollingInterval);
+    if (onlineInterval) clearInterval(onlineInterval);
+    
+    // Core chat polling
+    pollingInterval = setInterval(refreshUI, 4000);
+    
+    // Online status (ping + check others)
+    onlineInterval = setInterval(() => {
+        pingOnline();
+        loadOnlineStatus();
+    }, 15000);
 
-async function encryptAuth(text, user) {
-  const enc = new TextEncoder();
-  const iv = window.crypto.getRandomValues(new Uint8Array(12));
-  const key = await deriveAuthKey(user);
-  const encrypted = await window.crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(text));
-  return JSON.stringify({ d: uint8ArrayToBase64(new Uint8Array(encrypted)), i: uint8ArrayToBase64(iv) });
-}
-
-async function decryptAuth(cipherStr, user) {
-  if (!cipherStr || !cipherStr.startsWith('{')) return null;
-  try {
-    const { d, i } = JSON.parse(cipherStr);
-    const key = await deriveAuthKey(user);
-    const iv = base64ToUint8Array(i);
-    const data = base64ToUint8Array(d);
-    const dec = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
-    return new TextDecoder().decode(dec);
-  } catch (e) { return null; }
-}
-
-const handleAuth = async () => {
-  const username = usernameInput.value.trim();
-  const password = passwordInput.value.trim();
-  if (!username || !password) return;
-  if (username.includes(' ')) { showToast('Username no spaces.', 'error'); return; }
-  authLoading.value = true;
-  try {
-    if (isRegisterMode.value) {
-      try { await userDb.get(username); showToast('Username has been taken.', 'error'); } catch (err) {
-        if (err.status === 404) {
-          const encryptedPassword = await encryptAuth(password, username);
-          await userDb.put({ _id: username, password: encryptedPassword, createdAt: new Date().toISOString() });
-          showToast('Vault identity created!'); isRegisterMode.value = false;
-        } else throw err;
-      }
-    } else {
-      try {
-        const userDoc = await userDb.get(username);
-        const storedPass = userDoc.password;
-        // Check if legacy or encrypted
-        if (storedPass.startsWith('{')) {
-          const decryptedPass = await decryptAuth(storedPass, username);
-          if (decryptedPass === password) {
-            localStorage.setItem('chat_username', username);
-            currentUser.value = username;
-            initApp();
-          } else showToast('Invalid passphrase.', 'error');
-        } else {
-          // Fallback legacy support
-          if (storedPass === password) {
-             localStorage.setItem('chat_username', username);
-             currentUser.value = username;
-             initApp();
-          } else showToast('Invalid passphrase.', 'error');
-        }
-      } catch (err) {
-        if (err.status === 404) showToast('Vault identity not found.', 'error');
-        else throw err;
-      }
-    }
-  } catch (err) { showToast('Error connecting to vault.', 'error'); } finally { authLoading.value = false; }
+    // Initial immediate actions
+    pingOnline();
+    loadOnlineStatus();
 };
-
-const logout = () => { currentUser.value = null; localStorage.removeItem('chat_username'); selectedContact.value = null; showLogoutConfirm.value = false; clearInterval(heartbeatInterval); };
-const scrollToBottom = (behavior = 'smooth') => { nextTick(() => { if (messageBox.value) messageBox.value.scrollTo({ top: messageBox.value.scrollHeight, behavior }); }); };
-
-const startSync = () => {
-  syncModule(db, CHAT_DB_NAME);
-  syncModule(userDb, CHAT_USERS_DB_NAME);
-  syncModule(onlineDb, ONLINE_CHAT_DB_NAME);
-  db.changes({ live: true, since: 'now', include_docs: true }).on('change', (change) => {
-    // Immediate RTC check
-    if (change.doc.type === 'rtc_signal') handleRtcSignal(change.doc);
-    else refreshUI();
-  });
-  onlineDb.changes({ live: true, since: 'now', include_docs: true }).on('change', () => loadOnlineStatus());
-  userDb.changes({ live: true, since: 'now', include_docs: true }).on('change', () => loadAllRoster());
-};
-
-// --- WebRTC Implementation ---
 
 async function sendSignal(to, data) {
-  const signalDoc = {
-    _id: `rtc_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-    type: 'rtc_signal', from: currentUser.value, to, data, timestamp: Date.now()
-  };
-  await db.put(signalDoc);
+    await saveModuleData('instant_chat', { type: 'rtc_signal', from: currentUser.value, to, data, timestamp: Date.now() });
 }
 
 const handleRtcSignal = async (doc) => {
-  if (doc.to !== currentUser.value) return;
-  const { from, data } = doc;
+  if (doc.data.to !== currentUser.value) return;
+  const { from, data } = doc.data;
   
+  // Important: Delete signal after reading so it doesn't double-trigger
+  try {
+     await apiFetch(`/api/modules/instant_chat/${doc.id}`, { method: 'DELETE' });
+  } catch(e) {}
+
   if (data.type === 'offer') {
-    if (activeCall.value || incomingCall.value) {
-       // Busy
-       return;
-    }
+    if (activeCall.value || incomingCall.value) return;
     incomingCall.value = { from, callType: data.callType, offer: data.offer };
   } else if (data.type === 'answer') {
     if (peerConnection) await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-    callStatus.value = 'Connected';
-    isCallConnected.value = true;
+    callStatus.value = 'Connected'; isCallConnected.value = true;
   } else if (data.type === 'candidate') {
     if (peerConnection) await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
   } else if (data.type === 'hangup') {
-    if (activeCall.value?.other === from) {
-       const callType = activeCall.value.callType;
-       const wasConnected = isCallConnected.value;
-       const logText = wasConnected 
-         ? `📞 ${callType === 'video' ? 'Video' : 'Voice'} Call Ended` 
-         : `↙️ Missed ${callType === 'video' ? 'Video' : 'Voice'} Call`;
-       
-       if (selectedContact.value?.username === from) logLocalCall(from, logText);
-       endCall(false);
-    }
-    if (incomingCall.value?.from === from) {
-       logLocalCall(from, `↙️ Missed ${incomingCall.value.callType === 'video' ? 'Video' : 'Voice'} Call`);
-       incomingCall.value = null;
-    }
+    if (activeCall.value?.other === from) endCall(false);
+    if (incomingCall.value?.from === from) incomingCall.value = null;
   }
-  
-  // Clean up signal doc immediately to prevent re-processing
-  try { await db.remove(doc); } catch(e){}
 };
 
 const initiateCall = async (type) => {
@@ -592,34 +500,26 @@ const initiateCall = async (type) => {
   activeCall.value = { other, callType: type, isInitiator: true };
   callStatus.value = 'Ringing...';
   
+  // Log historical entry
+  await saveModuleData('instant_chat', {
+     type: 'chat_msg', from: currentUser.value, to: other, 
+     text: `Panggilan ${type === 'video' ? 'Video' : 'Suara'} Keluar`,
+     isCallLog: true, timestamp: Date.now()
+  });
+
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({ 
-      video: type === 'video', 
-      audio: true 
-    });
-    
-    // Wait for next tick so refs are available
+    localStream = await navigator.mediaDevices.getUserMedia({ video: type === 'video', audio: true });
     await nextTick();
     if (localVideoRef.value) localVideoRef.value.srcObject = localStream;
-    
     peerConnection = new RTCPeerConnection(rtcConfig);
     localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-    
-    peerConnection.ontrack = (event) => {
-      if (remoteVideoRef.value) remoteVideoRef.value.srcObject = event.streams[0];
-    };
-    
-    peerConnection.onicecandidate = (event) => {
-      if (event.candidate) sendSignal(other, { type: 'candidate', candidate: event.candidate });
-    };
-    
+    peerConnection.ontrack = (event) => { if (remoteVideoRef.value) remoteVideoRef.value.srcObject = event.streams[0]; };
+    peerConnection.onicecandidate = (event) => { if (event.candidate) sendSignal(other, { type: 'candidate', candidate: event.candidate }); };
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
     sendSignal(other, { type: 'offer', offer, callType: type });
-    
   } catch (err) {
-    showToast('Media access denied or failed.', 'error');
-    endCall(true);
+    showToast('Media access denied.', 'error'); endCall(true);
   }
 };
 
@@ -629,202 +529,193 @@ const acceptCall = async () => {
   activeCall.value = { other: from, callType, isInitiator: false };
   callStatus.value = 'Connecting...';
   incomingCall.value = null;
-  
+
+  // Log accepted call
+  await saveModuleData('instant_chat', {
+     type: 'chat_msg', from: currentUser.value, to: from, 
+     text: `Panggilan Masuk Diangkat`,
+     isCallLog: true, timestamp: Date.now()
+  });
+
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({ 
-      video: callType === 'video', 
-      audio: true 
-    });
-    
+    localStream = await navigator.mediaDevices.getUserMedia({ video: callType === 'video', audio: true });
     await nextTick();
     if (localVideoRef.value) localVideoRef.value.srcObject = localStream;
-    
     peerConnection = new RTCPeerConnection(rtcConfig);
     localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-    
-    peerConnection.ontrack = (event) => {
-      if (remoteVideoRef.value) remoteVideoRef.value.srcObject = event.streams[0];
-    };
-    
-    peerConnection.onicecandidate = (event) => {
-      if (event.candidate) sendSignal(from, { type: 'candidate', candidate: event.candidate });
-    };
-    
+    peerConnection.ontrack = (event) => { if (remoteVideoRef.value) remoteVideoRef.value.srcObject = event.streams[0]; };
+    peerConnection.onicecandidate = (event) => { if (event.candidate) sendSignal(from, { type: 'candidate', candidate: event.candidate }); };
     await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
     const answer = await peerConnection.createAnswer();
     await peerConnection.setLocalDescription(answer);
     sendSignal(from, { type: 'answer', answer });
-    
-    callStatus.value = 'Connected';
-    isCallConnected.value = true;
+    callStatus.value = 'Connected'; isCallConnected.value = true;
   } catch (err) {
-    showToast('Failed to accept call.', 'error');
-    endCall(true);
+    showToast('Failed to accept call.', 'error'); endCall(true);
   }
-};
-
-const logLocalCall = (target, text) => {
-  const msg = {
-    _id: `call_log_${Date.now()}_${Math.random().toString(36).slice(2,5)}`,
-    type: 'chat_msg', from: target, to: currentUser.value, text, timestamp: Date.now(), isCallLog: true, status: 'read'
-  };
-  messages.value.push(msg); // Local state push only for instant feedback
-  scrollToBottom();
-};
-
-const logCallDoc = async (target, text) => {
-  const msgDoc = {
-    _id: `call_doc_${Date.now()}_${Math.random().toString(34).slice(2, 6)}`,
-    type: 'chat_msg', from: currentUser.value, to: target, text, status: 'sent',
-    timestamp: Date.now(), isCallLog: true
-  };
-  await db.put(msgDoc);
-  refreshUI();
 };
 
 const declineCall = async () => {
   if (incomingCall.value) {
-    const { from, callType } = incomingCall.value;
+    const { from } = incomingCall.value;
+    
+    // Log missed/declined call
+    await saveModuleData('instant_chat', {
+       type: 'chat_msg', from: currentUser.value, to: from, 
+       text: `Panggilan Tak Terjawab`,
+       isCallLog: true, timestamp: Date.now()
+    });
+
     await sendSignal(from, { type: 'hangup' });
-    await logCallDoc(from, `↘️ Missed ${callType === 'video' ? 'Video' : 'Voice'} Call`);
     incomingCall.value = null;
   }
 };
 
 const endCall = (sendHangup = true) => {
   const other = activeCall.value?.other;
-  const wasConnected = isCallConnected.value;
-  const callType = activeCall.value?.callType;
-
-  if (sendHangup && other) {
-    sendSignal(other, { type: 'hangup' });
-    const logText = wasConnected 
-      ? `📞 ${callType === 'video' ? 'Video' : 'Voice'} Call Ended` 
-      : `🚫 Cancelled ${callType === 'video' ? 'Video' : 'Voice'} Call`;
-    
-    logCallDoc(other, logText);
-  }
-  
-  if (localStream) {
-    localStream.getTracks().forEach(t => t.stop());
-    localStream = null;
-  }
-  if (peerConnection) {
-    peerConnection.close();
-    peerConnection = null;
-  }
-  
-  activeCall.value = null;
-  callStatus.value = '';
-  isCallConnected.value = false;
+  if (sendHangup && other) sendSignal(other, { type: 'hangup' });
+  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
+  if (peerConnection) { peerConnection.close(); peerConnection = null; }
+  activeCall.value = null; callStatus.value = ''; isCallConnected.value = false;
 };
 
 const refreshUI = async () => {
-  await loadChatList();
-  if (selectedContact.value) {
-    await loadMessages(selectedContact.value.username);
-    await markAsRead(selectedContact.value.username);
-  }
-};
+    if (!isLoggedIn.value) return;
+    try {
+        const results = await getModuleData('instant_chat');
+        if (!Array.isArray(results)) {
+            console.warn('Chat data is not an array:', results);
+            return;
+        }
+        
+        // Handle RTC Signals (Calling)
+        const signals = results.filter(r => r && r.data && r.data.type === 'rtc_signal' && r.data.to === currentUser.value);
+        for (const s of signals) await handleRtcSignal(s);
 
-const loadChatList = async () => {
-  const res = await db.allDocs({ include_docs: true });
-  const all = res.rows.map(r => r.doc).filter(d => d.type === 'chat_msg');
-  const groups = {};
-  all.forEach(m => {
-    const other = m.from === currentUser.value ? m.to : m.from;
-    if (!groups[other] || groups[other].timestamp < m.timestamp) {
-      groups[other] = { username: other, timestamp: m.timestamp, isOnline: onlineStatusMap.value[other] || false };
+        // Group messages for Chat List
+        const allMsgs = results.filter(r => r && r.data && r.data.type === 'chat_msg');
+        const groups = {};
+        allMsgs.forEach(m => {
+          const mData = m.data;
+          if (!mData) return;
+          const other = mData.from === currentUser.value ? mData.to : mData.from;
+          if (!other) return;
+          if (!groups[other] || groups[other].timestamp < mData.timestamp) {
+            groups[other] = { username: other, timestamp: mData.timestamp };
+          }
+        });
+        
+        // Ensure chat list order and online status
+        chatList.value = Object.values(groups).sort((a,b) => b.timestamp - a.timestamp);
+
+        // Update active chat messages
+        if (selectedContact.value) {
+            const other = selectedContact.value.username;
+            const rawMsgs = allMsgs.filter(d => d.data && ((d.data.from === currentUser.value && d.data.to === other) || (d.data.from === other && d.data.to === currentUser.value)))
+                                    .sort((a,b) => a.data.timestamp - b.data.timestamp);
+            
+            const processed = await Promise.all(rawMsgs.map(async (m) => {
+              const doc = { ...m.data, _id: m.id };
+              // Decrypt if needed
+              if (doc.encrypted && (!doc.text || doc.text === '')) {
+                doc.text = await decrypt(doc.encrypted, other);
+              }
+              if (doc.encryptedFile && !doc.file) {
+                 doc.file = await decrypt(doc.encryptedFile, other);
+              }
+              return doc;
+            }));
+
+            if (processed.length > messages.value.length) {
+                messages.value = processed;
+                scrollToBottom();
+            } else {
+                messages.value = processed;
+            }
+        }
+    } catch (e) {
+      console.error('Refresh UI Error:', e);
     }
-  });
-  chatList.value = Object.values(groups).sort((a,b) => b.timestamp - a.timestamp);
 };
-
-const filteredChatList = computed(() => {
-  const q = contactSearchTerm.value.toLowerCase().trim();
-  const list = chatList.value.map(c => ({ ...c, isOnline: onlineStatusMap.value[c.username] || false }));
-  if (!q) return list;
-  return list.filter(c => c.username.toLowerCase().includes(q));
-});
 
 const selectContact = async (contact) => {
-  selectedContact.value = { ...contact, isOnline: onlineStatusMap.value[contact.username] || false };
-  await loadMessages(contact.username);
-  await markAsRead(contact.username);
+  selectedContact.value = { ...contact, isOnline: !!onlineStatusMap.value[contact.username] };
+  await refreshUI();
   scrollToBottom('auto');
-};
-
-const markAsRead = async (other) => {
-  const res = await db.allDocs({ include_docs: true });
-  const unread = res.rows.map(r => r.doc).filter(d => 
-    d.type === 'chat_msg' && d.from === other && d.to === currentUser.value && d.status !== 'read'
-  );
-  if (unread.length > 0) {
-    for (let m of unread) { m.status = 'read'; await db.put(m); }
-  }
-};
-
-const loadMessages = async (other) => {
-  if (!currentUser.value) return;
-  const res = await db.allDocs({ include_docs: true });
-  const rawMsgs = res.rows.map(r => r.doc)
-    .filter(d => d.type === 'chat_msg' && ((d.from === currentUser.value && d.to === other) || (d.from === other && d.to === currentUser.value)))
-    .sort((a,b) => a.timestamp - b.timestamp);
-  
-  const processed = await Promise.all(rawMsgs.map(async (m) => {
-    const doc = { ...m };
-    if (doc.encrypted && (!doc.text || doc.text === '')) doc.text = await decrypt(doc.encrypted, other);
-    if (doc.encryptedFile && !doc.file) doc.file = await decrypt(doc.encryptedFile, other);
-    return doc;
-  }));
-  messages.value = processed;
 };
 
 const sendMessage = async () => {
   if (!newMessage.value.trim() && !pendingFile.value) return;
+  if (!selectedContact.value) {
+    showToast('Pilih kontak terlebih dahulu', 'error');
+    return;
+  }
+  
   const to = selectedContact.value.username;
-  const text = newMessage.value;
-  const encrypted = await encrypt(text, to);
-  let encryptedFile = null;
-  if(pendingFile.value) encryptedFile = await encrypt(pendingFile.value.data, to);
+  loading.value = true;
+  
+  try {
+    const encrypted = await encrypt(newMessage.value, to);
+    let encryptedFile = null;
+    if (pendingFile.value) {
+      encryptedFile = await encrypt(pendingFile.value.data, to);
+    }
 
-  const msgDoc = {
-    _id: `chat_${Date.now()}_${Math.random().toString(34).slice(2, 6)}`,
-    type: 'chat_msg', from: currentUser.value, to, encrypted, encryptedFile, status: 'sent',
-    timestamp: Date.now(), fileName: pendingFile.value?.name || null, fileType: pendingFile.value?.type || null
-  };
-  await db.put(msgDoc);
-  newMessage.value = ''; pendingFile.value = null; refreshUI(); scrollToBottom();
+    const msgData = {
+      type: 'chat_msg',
+      from: currentUser.value,
+      to,
+      encrypted,
+      encryptedFile,
+      status: 'sent',
+      timestamp: Date.now(),
+      fileName: pendingFile.value?.fileName,
+      fileType: pendingFile.value?.fileType
+    };
+
+    const res = await saveModuleData('instant_chat', msgData);
+    if (!res.ok) throw new Error(res.error || 'Gagal mengirim pesan ke server');
+    
+    newMessage.value = '';
+    pendingFile.value = null;
+    await refreshUI();
+  } catch (err) {
+    console.error('Send Message Error:', err);
+    showToast('Gagal mengirim pesan: ' + err.message, 'error');
+  } finally {
+    loading.value = false;
+  }
 };
 
 const handleFileSelect = (e) => {
   const file = e.target.files[0]; if(!file) return;
-  const reader = new FileReader();
-  reader.onload = (ev) => { pendingFile.value = { name: file.name, type: file.type, data: ev.target.result }; sendMessage(); };
+  const reader = new FileReader(); reader.onload = (ev) => {
+    pendingFile.value = { data: ev.target.result, fileName: file.name, fileType: file.type };
+    sendMessage();
+  };
   reader.readAsDataURL(file);
 };
 
 const openNewChatModal = () => { showNewChatModal.value = true; nextTick(() => newChatInput.value?.focus()); };
 const startNewChat = () => {
-  if (!newChatUsername.value.trim()) return;
-  const user = newChatUsername.value.trim();
-  if (user === currentUser.value) { showToast('Cannot chat with yourself.', 'error'); return; }
-  selectContact({ username: user });
-  showNewChatModal.value = false; newChatUsername.value = '';
+    if (!newChatUsername.value || newChatUsername.value === currentUser.value) return;
+    const user = newChatUsername.value.trim();
+    if (!chatList.value.find(c => c.username === user)) chatList.value.push({ username: user, timestamp: Date.now(), isOnline: false });
+    selectContact({ username: user }); showNewChatModal.value = false; newChatUsername.value = '';
 };
 
-const openImage = (url) => previewImage.value = url;
-function initApp() { 
-  loadChatList(); 
-  loadOnlineStatus();
-  loadAllRoster();
-  startSync(); 
-  pingOnline();
-  heartbeatInterval = setInterval(() => { pingOnline(); loadOnlineStatus(); loadAllRoster(); }, 30000);
-}
+const scrollToBottom = (behavior = 'smooth') => { nextTick(() => { if (messageBox.value) messageBox.value.scrollTo({ top: messageBox.value.scrollHeight, behavior }); }); };
+const openImage = (url) => { previewImage.value = url; };
+const logout = () => { showLogoutConfirm.value = false; window.location.href = '/login'; };
 
-onMounted(() => { if (isLoggedIn.value) initApp(); });
-onBeforeUnmount(() => clearInterval(heartbeatInterval));
+onMounted(async () => {
+    if (isLoggedIn.value) { await loadAllRoster(); await refreshUI(); startPolling(); }
+});
+onBeforeUnmount(() => { clearInterval(pollingInterval); clearInterval(onlineInterval); endCall(true); });
+watch(isLoggedIn, async (val) => {
+    if (val) { await loadAllRoster(); await refreshUI(); startPolling(); }
+    else { clearInterval(pollingInterval); clearInterval(onlineInterval); }
+});
 </script>
 
 <style scoped>

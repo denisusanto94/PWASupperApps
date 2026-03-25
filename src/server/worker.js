@@ -1,8 +1,7 @@
 import { getSocket, sendWhatsAppMessage } from './baileys.js';
 
-const JITTER_MIN = 10 * 1000;
-const JITTER_MAX = 15 * 1000;
-const activeWorkers = new Set();
+const JITTER_MIN = 2 * 1000;
+const JITTER_MAX = 5 * 1000;
 
 function randomDelay() {
   return Math.floor(Math.random() * (JITTER_MAX - JITTER_MIN + 1)) + JITTER_MIN;
@@ -10,65 +9,60 @@ function randomDelay() {
 
 function formatJid(number) {
   const cleaned = String(number).replace(/\D/g, '');
-  if (cleaned.endsWith('@s.whatsapp.net')) return cleaned;
-  return cleaned + '@s.whatsapp.net';
+  if (!cleaned.endsWith('@s.whatsapp.net')) return cleaned + '@s.whatsapp.net';
+  return cleaned;
 }
 
-export async function startWorker(db, sessionId = 'main') {
-  if (activeWorkers.has(sessionId)) return;
-  activeWorkers.add(sessionId);
-
-  const sock = getSocket(sessionId);
-  if (!sock) {
-    console.warn(`Worker [${sessionId}]: Baileys belum siap, perubahan outbox akan diproses setelah koneksi.`);
-  }
-
-
-  const changeHandler = async (change) => {
-    if (change.deleted) return;
+/**
+ * Optimized worker for MySQL.
+ * Polls the wa_blaster table for pending messages.
+ */
+export async function startWorker(mysqlPool) {
+  console.log('🚀 Global WhatsApp Outbox Worker started...');
+  
+  // Single recursive loop to avoid overlapping pools if processing takes long
+  const processNext = async () => {
     try {
-      const doc = await db.get(change.id);
-      if (doc.type !== 'outbox' || doc.status !== 'pending') return;
+      const [rows] = await mysqlPool.query(
+        "SELECT id, user_id, data FROM wa_blaster WHERE JSON_UNQUOTE(JSON_EXTRACT(data, '$.type')) = 'outbox' AND JSON_UNQUOTE(JSON_EXTRACT(data, '$.status')) = 'pending' ORDER BY id ASC LIMIT 1"
+      );
 
-      const sessionId = doc.sessionId || 'main';
-      const jid = formatJid(doc.phone);
-      const text = doc.message || '';
+      if (rows.length > 0) {
+        const { id, user_id, data } = rows[0];
+        const sessionId = data.sessionId || 'main'; // Should be unique per whatsapp account
+        
+        // 1. Mark as processing
+        const processingData = { ...data, status: 'processing' };
+        await mysqlPool.query("UPDATE wa_blaster SET data = ? WHERE id = ?", [JSON.stringify(processingData), id]);
 
-      await new Promise((r) => setTimeout(r, randomDelay()));
+        try {
+          const jid = formatJid(data.phone);
+          const text = data.message || '';
 
-      await sendWhatsAppMessage(jid, text, sessionId);
-      await db.put({
-        ...doc,
-        status: 'sent',
-        sentAt: new Date().toISOString(),
-      });
-    } catch (err) {
-      console.error('Worker send error:', err);
+          // Wait before sending (anti-spam)
+          await new Promise(r => setTimeout(r, randomDelay()));
 
-      try {
-        const doc = await db.get(change.id);
-        if (doc.type === 'outbox' && doc.status === 'pending') {
-          await db.put({
-            ...doc,
-            status: 'failed',
-            error: err.message || String(err),
-            updatedAt: new Date().toISOString(),
-          });
+          await sendWhatsAppMessage(jid, text, user_id, sessionId);
+
+          // 2. Mark as sent
+          const sentData = { ...data, status: 'sent', sentAt: new Date().toISOString() };
+          await mysqlPool.query("UPDATE wa_blaster SET data = ? WHERE id = ?", [JSON.stringify(sentData), id]);
+          console.log(`✅ [Worker] Sent to ${data.phone} for user ${user_id}`);
+        } catch (err) {
+          console.error(`❌ [Worker] Send error for ID ${id}:`, err.message);
+          const failedData = { ...data, status: 'failed', error: err.message, updatedAt: new Date().toISOString() };
+          await mysqlPool.query("UPDATE wa_blaster SET data = ? WHERE id = ?", [JSON.stringify(failedData), id]);
         }
-      } catch (e) {
-        console.error('Worker failed to update doc:', e);
       }
+    } catch (err) {
+      console.error('❌ [Worker] Critical loop error:', err);
     }
+    
+    // Schedule next run
+    setTimeout(processNext, 3000);
   };
 
-  db.changes({
-    live: true,
-    since: 'now',
-    filter: (doc) => doc.type === 'outbox' && doc.status === 'pending',
-  })
-    .on('change', (change) => changeHandler(change))
-    .on('error', (err) => console.error('Worker changes error:', err));
-
-  console.log(`Worker [${sessionId}]: mendengarkan outbox (type=outbox, status=pending)`);
+  processNext();
 }
+
 

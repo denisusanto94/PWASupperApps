@@ -6,19 +6,51 @@
       </div>
     </Transition>
 
-    <header v-if="showBackHeader" class="app-header">
+    <header v-if="appHeaderVisible" class="app-header">
       <div class="app-header-container">
-        <router-link to="/" class="back-link" aria-label="Kembali ke home">
+        <router-link v-if="route.path !== '/'" to="/" class="back-link" aria-label="Kembali ke home">
           <span class="back-icon">←</span>
         </router-link>
+        
+        <div v-else class="header-brand-placeholder">
+           <h2 class="mini-brand">PWA<span>Supper</span></h2>
+        </div>
+        
         <div id="app-header-portal" class="header-portal"></div>
         
-        <!-- Sync Status -->
-        <div class="sync-indicator-box" :title="`Terakhir Sinkron: ${syncStatus.lastSync ? new Date(syncStatus.lastSync).toLocaleString() : 'Belum pernah'}`">
-           <svg :class="{ spinning: syncStatus.activeCount > 0 }" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" :color="syncStatus.activeCount > 0 ? '#00a884' : '#94a3b8'"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 12c0-4.4 3.6-8 8-8 3.3 0 6.2 2 7.4 4.9M22 12c0 4.4-3.6 8-8 8-3.3 0-6.2-2-7.4-4.9"/></svg>
+        <!-- User Info & Navigation -->
+        <div class="user-nav">
+          <!-- Logged In State -->
+          <template v-if="authState.user">
+            <router-link v-if="authState.user?.role === 'admin'" to="/admin" class="nav-icon-link" title="Admin Panel">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </router-link>
+
+            <div class="user-profile-menu">
+              <div class="user-info">
+                <span class="user-name-label">{{ authState.user?.full_name || 'User' }}</span>
+                <div class="avatar-mini" :style="{ background: '#00a884' }">
+                  {{ (authState.user?.full_name || 'U').charAt(0) }}
+                </div>
+              </div>
+              
+              <button @click="handleLogout" class="logout-btn" title="Logout">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+              </button>
+            </div>
+          </template>
+
+          <!-- Anonymous State -->
+          <template v-else>
+            <router-link to="/login" class="login-pill-btn">
+              <span>Login</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M13.8 12H3"/></svg>
+            </router-link>
+          </template>
         </div>
       </div>
     </header>
+
     <main class="app-main">
       <router-view />
     </main>
@@ -26,120 +58,80 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onBeforeUnmount } from 'vue';
-import { useRoute } from 'vue-router';
+import { computed, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { toastState } from './toast.js';
-import PouchDB from 'pouchdb-browser';
-import { 
-  ONLINE_GENERAL_DB_NAME, VERSION_DB_NAME, syncModule, syncStatus,
-  CHAT_DB_NAME, CHAT_USERS_DB_NAME, ONLINE_CHAT_DB_NAME,
-  GETLYNK_DB_NAME, GETLYNK_USERS_DB_NAME, WEDDING_DB_NAME,
-  WEDDING_USERS_DB_NAME, TIMESTAMP_DB_NAME 
-} from './db.js';
+import { authState, setAuth, apiFetch } from './db.js';
 
 const route = useRoute();
-const showBackHeader = computed(() => {
-  return route.path !== '/' && !route.path.includes('/wedding-invitation/preview');
+const router = useRouter();
+
+const appHeaderVisible = computed(() => {
+  if (route.path === '/login') return false;
+  if (route.path.includes('/wedding-invitation/preview')) return false;
+  // Always show on home and other pages
+  return true;
 });
 
-// App Metrics & Online Tracking
-const clientId = localStorage.getItem('pwa_client_id') || `client_${Math.random().toString(36).slice(2, 11)}`;
-localStorage.setItem('pwa_client_id', clientId);
-const APP_VERSION = '1.0.5-vault-secure';
-
-let globalHeartbeat = null;
-
-onMounted(async () => {
-  const onlineDb = new PouchDB(ONLINE_GENERAL_DB_NAME);
-  const versionDb = new PouchDB(VERSION_DB_NAME);
-  
-  syncModule(onlineDb, ONLINE_GENERAL_DB_NAME);
-  syncModule(versionDb, VERSION_DB_NAME);
-
-  // Set Version
+// Cache Busting / Version Check
+const checkVersion = async () => {
   try {
-    let vDoc;
-    try { vDoc = await versionDb.get('current_version'); } catch (e) { vDoc = { _id: 'current_version' }; }
-    vDoc.version = APP_VERSION;
-    vDoc.updatedAt = new Date().toISOString();
-    await versionDb.put(vDoc);
-  } catch (e) {}
+    const res = await fetch('/version.json?t=' + Date.now());
+    const data = await res.json();
+    const currentVersion = localStorage.getItem('app_version');
+    
+    if (currentVersion && currentVersion !== String(data.timestamp)) {
+       console.log('🔄 New version detected, reloading...');
+       localStorage.setItem('app_version', String(data.timestamp));
+       window.location.reload(true);
+    } else {
+       localStorage.setItem('app_version', String(data.timestamp));
+    }
+  } catch (e) {
+    console.warn('Version check failed', e);
+  }
+};
 
-  // Heartbeat function
-  const ping = async () => {
+onMounted(() => {
+  checkVersion();
+  // Optional: Check every 5 minutes if app is left open
+  setInterval(checkVersion, 5 * 60 * 1000);
+});
+
+const handleLogout = async () => {
+  if (authState.user) {
     try {
-      let doc;
-      try { doc = await onlineDb.get(clientId); } catch (e) { doc = { _id: clientId }; }
-      doc.lastSeen = Date.now();
-      doc.type = 'general_presence';
-      await onlineDb.put(doc);
+      await apiFetch('/api/auth/logout', { method: 'POST' });
     } catch (e) {}
-  };
-
-  ping();
-  globalHeartbeat = setInterval(ping, 30000);
-});
-
-onBeforeUnmount(() => {
-  if (globalHeartbeat) clearInterval(globalHeartbeat);
-});
+  }
+  setAuth(null, null, false);
+  if (route.path !== '/') router.push('/');
+};
 </script>
 
 <style>
 :root {
-  --bg: #0f172a;
+  --bg: #020617;
   --card: #1e293b;
-  --text: #e2e8f0;
+  --text: #f8fafc;
   --muted: #94a3b8;
-  --green: #25D366;
-  --green-dim: #1da851;
-  --wedding-accent: #e879f9;
-  --radius: 12px;
+  --green: #00a884;
+  --primary: #3b82f6;
+  --radius: 16px;
 }
 
 * {
   box-sizing: border-box;
 }
 
-.global-toast {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 10001 !important;
-  padding: 1.1rem 1.75rem;
-  text-align: center;
-  font-weight: 800;
-  color: #fff;
-  font-size: 1.05rem;
-  box-shadow: 0 15px 35px rgba(0,0,0,0.6);
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  pointer-events: none; /* Let clicks pass through if covered */
-}
-
-/* Vibrancy override */
-.global-toast.success { background: #00a884 !important; }
-.global-toast.error { background: #f43f5e !important; }
-.global-toast.info { background: #3b82f6 !important; }
-.global-toast.warning { background: #f59e0b !important; }
-
-.toast-slide-enter-active, .toast-slide-leave-active {
-  transition: all 0.45s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.toast-slide-enter-from, .toast-slide-leave-to {
-  transform: translateY(-100%);
-  opacity: 0;
-}
-
 body {
   margin: 0;
-  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
 .app-shell {
@@ -148,17 +140,19 @@ body {
   flex-direction: column;
 }
 
+.header-portal {
+  flex-grow: 1;
+}
 
 .app-header {
-  height: 56px;
-  background: rgba(30, 41, 59, 0.85);
+  height: 64px;
+  background: rgba(15, 23, 42, 0.7);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   position: sticky;
   top: 0;
-  z-index: 9999;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
   display: flex;
   align-items: center;
 }
@@ -166,71 +160,169 @@ body {
 .app-header-container {
   display: flex;
   align-items: center;
-  padding: 0 1.25rem;
+  padding: 0 1.5rem;
   max-width: 1400px;
   margin: 0 auto;
   width: 100%;
-  gap: 1rem;
+  gap: 1.5rem;
 }
 
-.header-portal {
-  flex-grow: 1;
+.header-brand-placeholder {
   display: flex;
   align-items: center;
-  min-width: 0;
+}
+
+.mini-brand {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: white;
+  margin: 0;
+}
+
+.mini-brand span {
+  color: #00a884;
 }
 
 .back-link {
-  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  color: var(--text);
+  color: #94a3b8;
   text-decoration: none;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.05);
-  transition: all 0.2s ease;
-  flex-shrink: 0;
+  transition: all 0.2s;
 }
 
 .back-link:hover {
-  background: rgba(37, 211, 102, 0.2);
-  color: var(--green);
-  transform: scale(1.1);
-  box-shadow: 0 0 10px rgba(37, 211, 102, 0.3);
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+  transform: translateX(-2px);
 }
 
-.back-icon {
-  font-size: 1.1rem;
-  font-weight: bold;
-}
-
-.getlynkid-header-inner {
+.user-nav {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  width: 100%;
+  gap: 1.25rem;
 }
 
-.header-title {
-  margin: 0;
-  font-size: 1.15rem;
+.nav-icon-link {
+  color: #94a3b8;
+  transition: 0.2s;
+  display: flex;
+}
+
+.nav-icon-link:hover {
+  color: #3b82f6;
+  transform: translateY(-1px);
+}
+
+.user-profile-menu {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.35rem 0.35rem 0.35rem 1rem;
+  border-radius: 100px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.user-name-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #e2e8f0;
+}
+
+.avatar-mini {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: white;
+}
+
+.logout-btn {
+  background: rgba(244, 63, 94, 0.1);
+  color: #f43f5e;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.logout-btn:hover {
+  background: #f43f5e;
+  color: white;
+}
+
+.login-pill-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1.25rem;
+  background: var(--green);
+  color: white;
+  text-decoration: none;
+  border-radius: 100px;
+  font-size: 0.9rem;
   font-weight: 700;
-  color: #25D366;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 168, 132, 0.25);
 }
 
-.header-toolbelt { display: flex; align-items: center; gap: 0.75rem; }
-.tool-btn { background: rgba(255, 255, 255, 0.05); border: none; color: #94a3b8; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
-.tool-btn:hover { background: rgba(244, 63, 94, 0.1); color: #f43f5e; }
-.tool-btn.danger:hover { background: #f43f5e; color: #fff; transform: rotate(90deg); }
+.login-pill-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 15px rgba(0, 168, 132, 0.35);
+  filter: brightness(1.05);
+}
 
-.sync-indicator-box { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: rgba(255, 255, 255, 0.05); cursor: help; transition: 0.2s; }
-.sync-indicator-box:hover { background: rgba(255, 255, 255, 0.1); }
-.spinning { animation: spin 1.5s linear infinite; }
-@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+/* Global Toast Styles */
+.global-toast {
+  position: fixed;
+  top: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10001;
+  padding: 0.75rem 1.5rem;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.global-toast.success { background: #00a884; color: white; }
+.global-toast.error { background: #f43f5e; color: white; }
+.global-toast.info { background: #3b82f6; color: white; }
+
+.toast-slide-enter-active, .toast-slide-leave-active {
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.toast-slide-enter-from, .toast-slide-leave-to {
+  transform: translate(-50%, -2rem);
+  opacity: 0;
+}
 
 .app-main {
   flex: 1;
 }
 </style>
+

@@ -3,11 +3,6 @@
     <Teleport to="#app-header-portal">
       <div class="getlynkid-header-inner">
         <h1 class="header-title">getlynk.id</h1>
-        <div v-if="currentUser" class="header-actions">
-          <button @click="saveData" class="btn btn-primary btn-save" :disabled="saving">
-            {{ saving ? 'Menyimpan...' : 'Simpan Perubahan' }}
-          </button>
-        </div>
       </div>
     </Teleport>
 
@@ -35,9 +30,10 @@
     <div v-else class="getlynkid-layout">
       <!-- Kiri: Konten (70% Desktop) -->
       <section class="editor-section">
-        <div class="user-meta-bar">
-          <span>Login sebagai: <strong>@{{ currentUser }}</strong></span>
-          <button @click="logout" class="btn-logout">Logout</button>
+        <div v-if="currentUser" class="editor-top-actions">
+          <button @click="saveData" class="btn btn-primary btn-save-main" :disabled="saving">
+            {{ saving ? 'Menyimpan...' : 'Simpan Perubahan' }}
+          </button>
         </div>
         <div class="editor-card">
           <div class="editor-header">
@@ -190,67 +186,23 @@
 </template>
 
 <script setup>
-import { ref, onMounted, reactive } from 'vue';
-import PouchDB from 'pouchdb-browser';
-import { GETLYNK_DB_NAME, GETLYNK_USERS_DB_NAME, syncModule } from '../db.js';
+import { ref, onMounted, reactive, computed } from 'vue';
+import { 
+  authState,
+  getModuleData, 
+  saveModuleData,
+  GETLYNK_DB_NAME
+} from '../db.js';
 import { showToast } from '../toast.js';
 
-const db = new PouchDB(GETLYNK_DB_NAME);
-const userDb = new PouchDB(GETLYNK_USERS_DB_NAME);
-
-const currentUser = ref(localStorage.getItem('getlynkid_username') || null);
-const isRegisterMode = ref(false);
-const authLoading = ref(false);
-const authForm = reactive({ username: '', password: '' });
+const currentUser = computed(() => authState.user?.email || null);
+const currentUserName = computed(() => authState.user?.full_name || currentUser.value);
+const isLoggedIn = computed(() => !!authState.user);
 
 const blocks = ref([]);
 const showAddModal = ref(false);
 const saving = ref(false);
-
-const handleAuth = async () => {
-  const { username, password } = authForm;
-  if (!username.trim() || !password.trim()) return;
-  authLoading.value = true;
-  try {
-    if (isRegisterMode.value) {
-      try {
-        await userDb.get(username);
-        showToast('Username sudah terpakai.', 'error');
-      } catch (err) {
-        if (err.status === 404) {
-          await userDb.put({ _id: username, password, createdAt: new Date().toISOString() });
-          showToast('Berhasil daftar! Silakan masuk.');
-          isRegisterMode.value = false;
-        } else throw err;
-      }
-    } else {
-      try {
-        const userDoc = await userDb.get(username);
-        if (userDoc.password === password) {
-          currentUser.value = username;
-          localStorage.setItem('getlynkid_username', username);
-          await loadData();
-        } else {
-          showToast('Password salah.', 'error');
-        }
-      } catch (err) {
-        if (err.status === 404) showToast('User tidak ditemukan.', 'error');
-        else throw err;
-      }
-    }
-  } catch (err) {
-    console.error('Auth error:', err);
-    showToast('Gagal autentikasi.', 'error');
-  } finally {
-    authLoading.value = false;
-  }
-};
-
-const logout = () => {
-  currentUser.value = null;
-  localStorage.removeItem('getlynkid_username');
-  blocks.value = [];
-};
+const currentDocId = ref(null);
 
 const addBlock = (type) => {
   const newBlock = {
@@ -292,19 +244,22 @@ const handleFileUpload = (event, block) => {
   reader.readAsDataURL(file);
 };
 
-const getDocId = () => `config_${currentUser.value}`;
-
 const loadData = async () => {
   if (!currentUser.value) return;
   try {
-    const doc = await db.get(getDocId());
-    blocks.value = doc.blocks || [];
+    const results = await getModuleData(GETLYNK_DB_NAME);
+    if (results.length > 0) {
+      const doc = results[0];
+      currentDocId.value = doc.id;
+      blocks.value = doc.data.blocks || [];
+    } else {
+      blocks.value = [
+        { id: '1', type: 'text', value: 'Selamat datang di link saya!' },
+        { id: '2', type: 'link', label: 'Follow Instagram', url: 'https://instagram.com' },
+      ];
+    }
   } catch (err) {
-    if (err.status !== 404) console.warn('Load Getlynk data error:', err);
-    blocks.value = [
-      { id: '1', type: 'text', value: 'Selamat datang di link saya!' },
-      { id: '2', type: 'link', label: 'Follow Instagram', url: 'https://instagram.com' },
-    ];
+    console.warn('Load Getlynk data error:', err);
   }
 };
 
@@ -312,16 +267,12 @@ const saveData = async () => {
   if (!currentUser.value) return;
   saving.value = true;
   try {
-    let doc;
-    try {
-      doc = await db.get(getDocId());
-    } catch (e) {
-      doc = { _id: getDocId(), type: 'getlynkid_config', owner: currentUser.value };
-    }
-    doc.blocks = JSON.parse(JSON.stringify(blocks.value));
-    doc.updatedAt = new Date().toISOString();
-    await db.put(doc);
-    showToast('Perubahan berhasil disimpan!');
+    const dataToSave = {
+      blocks: JSON.parse(JSON.stringify(blocks.value))
+    };
+    const result = await saveModuleData(GETLYNK_DB_NAME, dataToSave, currentDocId.value);
+    if (result.ok && result.id) currentDocId.value = result.id;
+    showToast('Perubahan berhasil disimpan ke database!');
   } catch (err) {
     console.error('Save error:', err);
     showToast('Gagal menyimpan perubahan.', 'error');
@@ -332,9 +283,8 @@ const saveData = async () => {
 
 onMounted(() => {
   if (currentUser.value) loadData();
-  syncModule(db, GETLYNK_DB_NAME);
-  syncModule(userDb, GETLYNK_USERS_DB_NAME);
 });
+
 </script>
 
 <style scoped>

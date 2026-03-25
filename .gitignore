@@ -3,6 +3,7 @@ dist/
 database/
 sessions/
 package-lock.json
+public/timestamp-camera/
 .env
 *.log
 .DS_Store

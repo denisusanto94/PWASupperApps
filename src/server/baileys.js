@@ -2,7 +2,9 @@ import makeWASocket, {
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
+  DisconnectReason
 } from '@whiskeysockets/baileys';
+import pino from 'pino';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
@@ -20,62 +22,40 @@ function ensureSessionsDir() {
   }
 }
 
-function getSessionPath(sessionId) {
-  return path.join(SESSIONS_DIR, sessionId === 'main' ? '' : sessionId);
+function getSessionPath(userId, sessionId = 'main') {
+  return path.join(SESSIONS_DIR, `user_${userId}`, sessionId);
 }
 
+function getSessionKey(userId, sessionId = 'main') {
+  return `u${userId}_s${sessionId}`;
+}
 
-export async function startBaileys(db, sessionId = 'main') {
-  if (sessions.has(sessionId)) {
-    return sessions.get(sessionId);
-  }
+/**
+ * Refactored status updater using MySQL.
+ * We'll use the 'wa_blaster' table, filtering by user_id and session_id in data.
+ */
+async function updateConnectionDoc(mysqlPool, userId, sessionId, update) {
+    if (!mysqlPool) {
+        console.warn(`[${sessionId}] updateConnectionDoc: mysqlPool is NULL`);
+        return;
+    }
+    console.log(`[${sessionId}] Updating status for user ${userId} to ${update.status}`);
+    try {
+        // Find existing connection doc
+        const [rows] = await mysqlPool.query(
+            "SELECT id, data FROM wa_blaster WHERE user_id = ? AND JSON_UNQUOTE(JSON_EXTRACT(data, '$.type')) = 'connection' AND JSON_UNQUOTE(JSON_EXTRACT(data, '$.sessionId')) = ?",
+            [userId, sessionId]
+        );
 
-  ensureSessionsDir();
-  const sessionPath = getSessionPath(sessionId);
-  if (!fs.existsSync(sessionPath)) {
-    fs.mkdirSync(sessionPath, { recursive: true });
-  }
-
-  const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
-  let version;
-  try {
-    const v = await fetchLatestBaileysVersion();
-    version = v.version;
-  } catch (err) {
-    console.error(`⚠️ [${sessionId}] Gagal mengambil versi Baileys terbaru, menggunakan default:`, err.message);
-    version = [2, 3000, 1015901307]; // Fallback version
-  }
-
-  const sock = makeWASocket({
-    version,
-    auth: {
-      creds: state.creds,
-      keys: makeCacheableSignalKeyStore(state.keys, undefined),
-    },
-  });
-
-  async function updateConnectionDoc(update) {
-    let success = false;
-    let attempts = 0;
-    while (!success && attempts < 5) {
-      attempts++;
-      try {
-        let doc;
-        try {
-          doc = await db.get(CONNECTION_DOC_ID);
-        } catch (e) {
-          if (e.status !== 404) throw e;
-          doc = { _id: CONNECTION_DOC_ID };
-        }
-
+        let doc = rows.length > 0 ? (typeof rows[0].data === 'string' ? JSON.parse(rows[0].data) : rows[0].data) : { type: 'connection', sessionId, status: 'disconnected' };
+        
         // --- Hierarchy check ---
         const rank = { 'connected': 3, 'qr': 2, 'connecting': 1, 'disconnected': 0 };
         const currentRank = rank[doc.status || 'disconnected'] || 0;
         const updateRank = rank[update.status] || 0;
         
         if (update.status === 'connecting' && currentRank >= 2) {
-           success = true;
-           break;
+           return;
         }
 
         const nextDoc = { ...doc, ...update };
@@ -96,15 +76,54 @@ export async function startBaileys(db, sessionId = 'main') {
           nextDoc.qr = undefined;
         }
 
-        await db.put(nextDoc);
-        success = true;
-      } catch (err) {
-        if (err.status === 409) continue;
-        console.error(`updateConnectionDoc error [${sessionId}]:`, err);
-        break;
-      }
+        const jsonData = JSON.stringify(nextDoc);
+        if (rows.length > 0) {
+            await mysqlPool.query("UPDATE wa_blaster SET data = ? WHERE id = ?", [jsonData, rows[0].id]);
+        } else {
+            await mysqlPool.query("INSERT INTO wa_blaster (user_id, data) VALUES (?, ?)", [userId, jsonData]);
+        }
+    } catch (err) {
+        console.error(`❌ [${sessionId}] updateConnectionDoc error:`, err);
     }
+}
+
+export async function startBaileys(mysqlPool, userId, sessionId = 'main') {
+  const sessionKey = getSessionKey(userId, sessionId);
+  if (sessions.has(sessionKey)) {
+    return sessions.get(sessionKey);
   }
+
+  ensureSessionsDir();
+  const sessionPath = getSessionPath(userId, sessionId);
+  console.log(`[${sessionId}] Session path: ${sessionPath}`);
+  if (!fs.existsSync(sessionPath)) {
+    fs.mkdirSync(sessionPath, { recursive: true });
+  }
+  console.log(`[${sessionId}] Starting fresh WhatsApp handshake...`);
+  const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+  
+  let version = [2, 3000, 1015901307];
+  try {
+     const v = await fetchLatestBaileysVersion();
+     version = v.version;
+     console.log(`[${sessionId}] Current WA Version: ${version.join('.')}`);
+  } catch(e) {
+     console.warn(`[${sessionId}] Using fallback version due to fetch error.`);
+  }
+
+  const sock = makeWASocket({
+    auth: {
+      creds: state.creds,
+      keys: makeCacheableSignalKeyStore(state.keys, undefined),
+    },
+    printQRInTerminal: false,
+    logger: pino({ level: 'silent' }),
+    browser: ["Ubuntu", "Chrome", "20.0.04"],
+    connectTimeoutMs: 60000,
+    defaultQueryTimeoutMs: 0, 
+    keepAliveIntervalMs: 10000,
+    version,
+  });
 
   sock.ev.on('creds.update', saveCreds);
 
@@ -113,18 +132,18 @@ export async function startBaileys(db, sessionId = 'main') {
       if (ev.qr) {
         try {
           const qrDataUrl = await QRCode.toDataURL(ev.qr, { width: 280, margin: 1 });
-          await updateConnectionDoc({ status: 'qr', qr: qrDataUrl });
+          await updateConnectionDoc(mysqlPool, userId, sessionId, { status: 'qr', qr: qrDataUrl });
         } catch (e) {
-          await updateConnectionDoc({ status: 'qr', qr: ev.qr });
+          await updateConnectionDoc(mysqlPool, userId, sessionId, { status: 'qr', qr: ev.qr });
         }
       }
       if (ev.connection === 'open') {
-        await updateConnectionDoc({ status: 'connected', qr: undefined });
+        await updateConnectionDoc(mysqlPool, userId, sessionId, { status: 'connected', qr: undefined });
       }
       if (ev.connection === 'close') {
         const reason = ev.lastDisconnect?.error?.message || 'closed';
         const qrAttemptsEnded = /QR refs attempts ended|QR refs? attempts? ended/i.test(reason);
-        await updateConnectionDoc({
+        await updateConnectionDoc(mysqlPool, userId, sessionId, {
           status: 'disconnected',
           qr: undefined,
           reason,
@@ -136,38 +155,35 @@ export async function startBaileys(db, sessionId = 'main') {
     }
   });
 
-
-  sessions.set(sessionId, sock);
-  if (sessionId === 'main') global.waSocket = sock; // Legacy support
+  sessions.set(sessionKey, sock);
+  if (sessionId === 'main') global.waSocket = sock;
   
-  await updateConnectionDoc({ status: 'connecting', qr: undefined });
+  await updateConnectionDoc(mysqlPool, userId, sessionId, { status: 'connecting', qr: undefined });
   return sock;
 }
 
-export function getSocket(sessionId = 'main') {
-  return sessions.get(sessionId) || (sessionId === 'main' ? global.waSocket : null);
+export function getSocket(userId, sessionId = 'main') {
+  const sessionKey = getSessionKey(userId, sessionId);
+  return sessions.get(sessionKey) || (sessionId === 'main' ? global.waSocket : null);
 }
 
-/**
- * Tutup socket lama dan buat koneksi baru (untuk dapat QR baru setelah "QR refs attempts ended").
- */
-export async function restartConnection(db, sessionId = 'main') {
-  const old = sessions.get(sessionId);
+export async function restartConnection(mysqlPool, userId, sessionId = 'main') {
+  const sessionKey = getSessionKey(userId, sessionId);
+  const old = sessions.get(sessionKey);
   if (old?.ws?.close) {
     try {
       await old.ws.close();
-    } catch (e) {
-      console.warn(`restartConnection: close old socket [${sessionId}]`, e?.message);
-    }
+    } catch (e) {}
   }
-  sessions.delete(sessionId);
+  sessions.delete(sessionKey);
   if (sessionId === 'main') global.waSocket = null;
-  return startBaileys(db, sessionId);
+  return startBaileys(mysqlPool, userId, sessionId);
 }
 
-export async function sendWhatsAppMessage(jid, text, sessionId = 'main') {
-  const sock = getSocket(sessionId);
-  if (!sock) throw new Error(`WhatsApp [${sessionId}] belum terhubung`);
+export async function sendWhatsAppMessage(jid, text, userId, sessionId = 'main') {
+  const sock = getSocket(userId, sessionId);
+  if (!sock) throw new Error(`WhatsApp [${sessionId}] belum terhubung untuk user ${userId}`);
   await sock.sendMessage(jid, { text });
 }
+
 
