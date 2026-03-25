@@ -310,6 +310,7 @@ import { showToast } from '../toast.js';
 const currentUser = computed(() => authState.user?.email || null);
 const isLoggedIn = computed(() => !!authState.user);
 const isSyncing = ref(false);
+const isRefreshing = ref(false);
 
 const selectedContact = ref(null);
 const messages = ref([]);
@@ -560,27 +561,45 @@ const declineCall = async () => {
     const { from } = incomingCall.value;
     
     // Log missed/declined call
-    await saveModuleData('instant_chat', {
-       type: 'chat_msg', from: currentUser.value, to: from, 
-       text: `Panggilan Tak Terjawab`,
-       isCallLog: true, timestamp: Date.now()
-    });
-
-    await sendSignal(from, { type: 'hangup' });
-    incomingCall.value = null;
+    try {
+      await saveModuleData('instant_chat', {
+         type: 'chat_msg', from: currentUser.value, to: from, 
+         text: `Panggilan Tak Terjawab`,
+         isCallLog: true, timestamp: Date.now()
+      });
+      await sendSignal(from, { type: 'hangup' });
+    } catch (e) {
+      console.error('Error declining call:', e);
+    } finally {
+      incomingCall.value = null;
+    }
   }
 };
 
-const endCall = (sendHangup = true) => {
+const endCall = async (sendHangup = true) => {
+  if (localStream) { 
+    localStream.getTracks().forEach(t => t.stop()); 
+    localStream = null; 
+  }
+  if (peerConnection) { 
+    peerConnection.close(); 
+    peerConnection = null; 
+  }
   const other = activeCall.value?.other;
-  if (sendHangup && other) sendSignal(other, { type: 'hangup' });
-  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-  if (peerConnection) { peerConnection.close(); peerConnection = null; }
-  activeCall.value = null; callStatus.value = ''; isCallConnected.value = false;
+  activeCall.value = null; 
+  callStatus.value = ''; 
+  isCallConnected.value = false;
+
+  try {
+    if (sendHangup && other) await sendSignal(other, { type: 'hangup' });
+  } catch (e) {
+    console.error('Error sending hangup:', e);
+  }
 };
 
 const refreshUI = async () => {
-    if (!isLoggedIn.value) return;
+    if (!isLoggedIn.value || isRefreshing.value) return;
+    isRefreshing.value = true;
     try {
         const results = await getModuleData('instant_chat');
         if (!Array.isArray(results)) {
@@ -635,6 +654,8 @@ const refreshUI = async () => {
         }
     } catch (e) {
       console.error('Refresh UI Error:', e);
+    } finally {
+      isRefreshing.value = false;
     }
 };
 

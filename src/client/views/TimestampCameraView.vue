@@ -4,7 +4,6 @@
       <div class="header-inner">
         <h1 class="header-title">Timestamp Camera</h1>
         <div class="header-actions">
-          <span class="header-tagline">Photo with Location & Time</span>
         </div>
       </div>
     </Teleport>
