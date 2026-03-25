@@ -17,9 +17,10 @@ Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)
 
 ### 2. Instant Chat (Secure Communication)
 *   **Keamanan Vault**: Enkripsi identitas **AES-256 GCM** via PBKDF2 (Zero-Visibility Credentials).
+*   **Tambah Chat & Daftar User**: Antarmuka inisiasi sesi yang lebih intuitif dengan pencarian user yang cepat.
+*   **Clean User Roster**: Menyaring (exclude) akun `admin` dan `superadmin` dari daftar percakapan.
 *   **Real-time Calling (WebRTC)**: Panggilan suara dan video berkualitas tinggi (Peer-to-Peer).
-*   **Historical Call Logs**: Pencatatan riwayat panggilan otomatis (Missed, Ended, Cancelled) langsung ke dalam timeline chat untuk audit komunikasi.
-*   **Real-time Presence**: Indikator status online/offline berdasarkan heartbeat (`is_online_chat`).
+*   **Historical Call Logs**: Pencatatan riwayat panggilan otomatis (Missed, Ended, Cancelled) ke timeline chat.
 *   **Media Encryption**: Berbagi gambar, video, dan dokumen secara aman.
 
 ### 3. getlynk.id (Bio Link Creator)
@@ -28,8 +29,9 @@ Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)
 *   **User Editor Partitioning**: Data setiap pengguna dipisahkan secara ketat untuk privasi total.
 
 ### 4. Timestamp Camera (Absensi & Foto Lokasi)
-*   **File-Based Storage Architecture**: Mengatasi error `413 Payload Too Large` dengan menyimpan foto secara fisik di server (`public/timestamp-camera/`) dan hanya menyimpan referensi URL di database.
-*   **High-Precision Overlays**: Koordinat lokasi (8 desimal), alamat detail (Reverse Geocoding), dan timestamp detik yang presisi.
+*   **File-Based Storage Architecture**: Menyimpan foto secara fisik di server (`public/timestamp-camera/`) untuk performa maksimal.
+*   **High-Precision Overlays**: Koordinat lokasi (8 desimal), alamat detail (Reverse Geocoding), dan timestamp presisi.
+*   **Corner-Flush Layout**: Overlay teks diposisikan rapat 10px ke pojok kanan bawah untuk tampilan yang lebih profesional.
 *   **On-Demand Activation**: Penggunaan resource kamera hanya saat dibutuhkan untuk efisiensi daya.
 *   **Full HD Portrait**: Output foto beresolusi 1080 x 1920 px.
 
@@ -44,6 +46,8 @@ Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)
 *   **Hybrid Sync Engine**: Menggabungkan kecepatan **PouchDB (Offline-first)** di sisi klien dengan keandalan **MySQL (Persistence)** di sisi server menggunakan sinkronisasi bridge yang cerdas.
 *   **MySQL Version Compatibility**: Seluruh query JSON menggunakan `JSON_UNQUOTE(JSON_EXTRACT(...))` untuk menjamin kompatibilitas pada versi MySQL lama maupun baru.
 *   **Security Hardening**: Migrasi kredensial otomatis dari plain-text ke format terenkripsi AES-256 GCM.
+*   **Single-Session Policy**: Mencegah multi-login pada perangkat/browser berbeda secara bersamaan untuk satu akun guna meningkatkan keamanan sesi.
+*   **Unique Registration Control**: Validasi ketat pada proses pendaftaran untuk memastikan integritas data pengguna (E-mail unik).
 *   **Global Notification System**: Overlay toast transparan dengan prioritas visual tertinggi (`z-index: 10001`).
 *   **PouchDB Registry**: Menghindari *file locking* pada Windows dengan memastikan sirkulasi instance database yang tunggal.
 

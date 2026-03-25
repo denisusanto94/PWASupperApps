@@ -142,6 +142,15 @@ app.post('/api/auth/login', async (req, res) => {
     const user = users[0];
     if (user.password !== password) return res.status(401).json({ error: 'Password salah' });
     
+    // Check if user already has an active session
+    const [activeSessions] = await mysqlPool.query(
+      `SELECT id FROM sessions_id WHERE user_id = ? AND expires_at > CURRENT_TIMESTAMP`,
+      [user.id]
+    );
+    if (activeSessions.length > 0) {
+      return res.status(403).json({ error: 'User sudah login. Tutup sesi di perangkat/browser lain terlebih dahulu.' });
+    }
+    
     const sessionId = crypto.randomUUID();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
     
@@ -207,7 +216,13 @@ app.get('/api/chat/online', authenticate, async (req, res) => {
 
 app.get('/api/users', authenticate, async (req, res) => {
   try {
-    const [rows] = await mysqlPool.query(`SELECT id, email, full_name FROM users`);
+    const [rows] = await mysqlPool.query(`
+      SELECT u.id, u.email, u.full_name 
+      FROM users u
+      LEFT JOIN users_has_roles uhr ON u.id = uhr.user_id
+      LEFT JOIN roles r ON uhr.role_id = r.id
+      WHERE (r.name IS NULL OR (r.name != 'admin' AND r.name != 'superadmin'))
+    `);
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

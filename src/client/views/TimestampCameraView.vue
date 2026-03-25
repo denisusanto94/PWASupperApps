@@ -414,16 +414,15 @@ const drawOverlay = () => {
   ctx.shadowOffsetX = 2;
   ctx.shadowOffsetY = 2;
   
-  const edgePadding = 60;
+  const edgePadding = 10;
   const lineHeight = fontSize * 1.2; 
   
-  let currentY = h - edgePadding - ((allLines.length - 1) * lineHeight);
+  const linesToDraw = allLines.filter(line => line.trim());
+  let currentY = h - edgePadding - ((linesToDraw.length - 1) * lineHeight);
   
-  allLines.forEach(line => {
-    if (line.trim()) {
-      ctx.fillText(line.trim(), w - edgePadding, currentY);
-      currentY += lineHeight;
-    }
+  linesToDraw.forEach(line => {
+    ctx.fillText(line, w - edgePadding, currentY);
+    currentY += lineHeight;
   });
   
   ctx.shadowBlur = 0;

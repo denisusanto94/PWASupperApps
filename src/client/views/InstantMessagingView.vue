@@ -65,7 +65,7 @@
         <div class="sidebar-top-box">
           <div class="flex items-center justify-between mb-6">
             <h3 class="session-title">Secured Sessions</h3>
-            <button @click="openNewChatModal" class="btn-add-session" title="New Session">
+            <button @click="openNewChatModal" class="btn-add-session" title="Tambah Chat">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             </button>
           </div>
@@ -222,7 +222,7 @@
       <div v-if="showNewChatModal" class="modal-backdrop" @click.self="showNewChatModal = false">
         <div class="modal-window-premium">
           <div class="modal-head">
-            <h3>Initialize Secure Session</h3>
+            <h3>Daftar User</h3>
             <button @click="showNewChatModal = false" class="btn-close-modal">×</button>
           </div>
           <div class="modal-body-premium">
@@ -429,7 +429,7 @@ const loadAllRoster = async () => {
   try {
     const res = await apiFetch('/api/users');
     const users = await res.json();
-    allRegisteredUsers.value = users.map(u => u.email).filter(email => email !== currentUser.value);
+    allRegisteredUsers.value = users.map(u => u.email).filter(email => email !== currentUser.value && email !== 'admin' && email !== 'superadmin');
   } catch (e) {}
 };
 
