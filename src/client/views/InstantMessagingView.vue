@@ -121,7 +121,7 @@
             <div class="header-tools" v-if="selectedContact">
                <button 
                   class="t-btn" 
-                  :disabled="!onlineStatusMap[selectedContact.username]" 
+                  :disabled="!onlineStatusMap[selectedContact.username] || !!rtcState.activeCall" 
                   @click="initiateCall('audio')"
                   :title="onlineStatusMap[selectedContact.username] ? 'Audio Call' : 'User Offline'"
                >
@@ -129,7 +129,7 @@
                </button>
                <button 
                   class="t-btn" 
-                  :disabled="!onlineStatusMap[selectedContact.username]" 
+                  :disabled="!onlineStatusMap[selectedContact.username] || !!rtcState.activeCall" 
                   @click="initiateCall('video')"
                   :title="onlineStatusMap[selectedContact.username] ? 'Video Call' : 'User Offline'"
                >
@@ -251,44 +251,6 @@
       </div>
     </Transition>
 
-    <!-- Call Overlay -->
-    <Transition name="fade">
-      <div v-if="activeCall" class="call-overlay-premium">
-        <div class="call-canvas">
-          <video ref="remoteVideoRef" autoplay playsinline class="remote-v"></video>
-          <div class="local-v-wrap" v-show="activeCall.callType === 'video'">
-            <video ref="localVideoRef" autoplay playsinline muted class="local-v"></video>
-          </div>
-          <div class="call-info">
-            <div class="c-avatar" :style="{ background: getAvatarColor(activeCall.other) }">{{ activeCall.other[0].toUpperCase() }}</div>
-            <h3>{{ activeCall.other }}</h3>
-            <p class="status-pulse">{{ callStatus }}</p>
-          </div>
-          <div class="call-actions">
-            <!-- <button @click="toggleMute" class="c-btn" :class="{ 'is-muted': isMuted }">Mute</button> -->
-            <button @click="endCall(true)" class="btn-hangup" title="End Call">
-               <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="23" y1="2" x2="1" y2="22"/></svg>
-            </button>
-          </div>
-        </div>
-      </div>
-    </Transition>
-
-    <!-- Incoming Call Modal -->
-    <Transition name="modal-bounce">
-      <div v-if="incomingCall" class="incoming-call-modal">
-        <div class="i-call-card">
-          <div class="i-avatar" :style="{ background: getAvatarColor(incomingCall.from) }">{{ incomingCall.from[0].toUpperCase() }}</div>
-          <h3 class="mb-1">Incoming {{ incomingCall.callType === 'video' ? 'Video' : 'Audio' }} Call</h3>
-          <p class="opacity-70 mb-6">{{ incomingCall.from }} is calling...</p>
-          <div class="i-actions">
-            <button @click="declineCall" class="btn-decline">Decline</button>
-            <button @click="acceptCall" class="btn-accept">Accept</button>
-          </div>
-        </div>
-      </div>
-    </Transition>
-
     <div v-if="previewImage" class="preview-overlay-box" @click="previewImage = null">
       <img :src="previewImage" />
     </div>
@@ -302,11 +264,11 @@ import {
   apiFetch,
   getModuleData, 
   saveModuleData,
-  INSTANT_CHAT_DB_NAME,
   migrateInstantChatReadMapOnce,
   setChatReadCursor
 } from '../db.js';
 import { showToast } from '../toast.js';
+import { rtcState, initiateOutgoingCall } from '../instantChatRtc.js';
 
 // State
 const currentUser = computed(() => authState.user?.email || null);
@@ -330,50 +292,6 @@ const fileInput = ref(null);
 const newChatInput = ref(null);
 const showLogoutConfirm = ref(false);
 const onlineStatusMap = ref({});
-
-// RTC State
-const activeCall = ref(null);
-const incomingCall = ref(null);
-const callStatus = ref('');
-const localVideoRef = ref(null);
-const remoteVideoRef = ref(null);
-const isCallConnected = ref(false);
-let peerConnection = null;
-let localStream = null;
-const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun2.l.google.com:19302' }] };
-
-const SOUND_VOICE_RING = '/sound/voice-call-ringing.mp3';
-const SOUND_VIDEO_RING = '/sound/video-call-ringing.mp3';
-const SOUND_END_DECLINE = '/sound/end-decline-call.mp3';
-
-let ringingAudio = null;
-
-function stopIncomingRingtone() {
-  if (ringingAudio) {
-    ringingAudio.pause();
-    ringingAudio.currentTime = 0;
-    ringingAudio.loop = false;
-    ringingAudio = null;
-  }
-}
-
-async function startIncomingRingtone(callType) {
-  stopIncomingRingtone();
-  const src = callType === 'video' ? SOUND_VIDEO_RING : SOUND_VOICE_RING;
-  ringingAudio = new Audio(src);
-  ringingAudio.loop = true;
-  try {
-    await ringingAudio.play();
-  } catch {
-    /* autoplay policy: user may need to tap Accept/Decline first */
-  }
-}
-
-function playEndDeclineSound() {
-  stopIncomingRingtone();
-  const a = new Audio(SOUND_END_DECLINE);
-  a.play().catch(() => {});
-}
 
 const SECRET_KEY = 'vault_core_v7.3_mysql';
 
@@ -503,146 +421,9 @@ const startPolling = () => {
     loadOnlineStatus();
 };
 
-async function sendSignal(to, data) {
-    await saveModuleData('instant_chat', { type: 'rtc_signal', from: currentUser.value, to, data, timestamp: Date.now() });
-}
-
-const handleRtcSignal = async (doc) => {
-  if (doc.data.to !== currentUser.value) return;
-  const { from, data } = doc.data;
-  
-  // 1. Stale Check (ignore signals older than 60s)
-  const isStale = (Date.now() - (data.timestamp || doc.updated_at)) > 60000;
-  
-  // Important: Delete signal after reading so it doesn't double-trigger
-  try {
-     await apiFetch(`/api/modules/instant_chat/${doc.id}`, { method: 'DELETE' });
-  } catch(e) {}
-  
-  if (isStale) return; // Silent discard
-
-  if (data.type === 'offer') {
-    if (activeCall.value || incomingCall.value) return;
-    incomingCall.value = { from, callType: data.callType, offer: data.offer };
-  } else if (data.type === 'answer') {
-    if (peerConnection) await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-    callStatus.value = 'Connected'; isCallConnected.value = true;
-  } else if (data.type === 'candidate') {
-    if (peerConnection) await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-  } else if (data.type === 'hangup') {
-    if (activeCall.value?.other === from) endCall(false);
-    if (incomingCall.value?.from === from) {
-      playEndDeclineSound();
-      incomingCall.value = null;
-    }
-  }
-};
-
 const initiateCall = async (type) => {
   if (!selectedContact.value) return;
-  const other = selectedContact.value.username;
-  activeCall.value = { other, callType: type, isInitiator: true };
-  callStatus.value = 'Ringing...';
-  
-  // Log historical entry
-  await saveModuleData('instant_chat', {
-     type: 'chat_msg', from: currentUser.value, to: other, 
-     text: `Panggilan ${type === 'video' ? 'Video' : 'Suara'} Keluar`,
-     isCallLog: true, timestamp: Date.now()
-  });
-
-  try {
-    localStream = await navigator.mediaDevices.getUserMedia({ video: type === 'video', audio: true });
-    await nextTick();
-    if (localVideoRef.value) localVideoRef.value.srcObject = localStream;
-    peerConnection = new RTCPeerConnection(rtcConfig);
-    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-    peerConnection.ontrack = (event) => { if (remoteVideoRef.value) remoteVideoRef.value.srcObject = event.streams[0]; };
-    peerConnection.onicecandidate = (event) => { if (event.candidate) sendSignal(other, { type: 'candidate', candidate: event.candidate }); };
-    const offer = await peerConnection.createOffer();
-    await peerConnection.setLocalDescription(offer);
-    sendSignal(other, { type: 'offer', offer, callType: type });
-  } catch (err) {
-    showToast('Media access denied.', 'error'); endCall(true);
-  }
-};
-
-const acceptCall = async () => {
-  if (!incomingCall.value) return;
-  const { from, offer, callType } = incomingCall.value;
-  activeCall.value = { other: from, callType, isInitiator: false };
-  callStatus.value = 'Connecting...';
-  incomingCall.value = null;
-
-  // Log accepted call
-  await saveModuleData('instant_chat', {
-     type: 'chat_msg', from: currentUser.value, to: from, 
-     text: `Panggilan Masuk Diangkat`,
-     isCallLog: true, timestamp: Date.now()
-  });
-
-  try {
-    localStream = await navigator.mediaDevices.getUserMedia({ video: callType === 'video', audio: true });
-    await nextTick();
-    if (localVideoRef.value) localVideoRef.value.srcObject = localStream;
-    peerConnection = new RTCPeerConnection(rtcConfig);
-    localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-    peerConnection.ontrack = (event) => { if (remoteVideoRef.value) remoteVideoRef.value.srcObject = event.streams[0]; };
-    peerConnection.onicecandidate = (event) => { if (event.candidate) sendSignal(from, { type: 'candidate', candidate: event.candidate }); };
-    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-    const answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer);
-    sendSignal(from, { type: 'answer', answer });
-    callStatus.value = 'Connected'; isCallConnected.value = true;
-  } catch (err) {
-    showToast('Failed to accept call.', 'error'); endCall(true);
-  }
-};
-
-const declineCall = async () => {
-  if (incomingCall.value) {
-    playEndDeclineSound();
-    const { from } = incomingCall.value;
-    
-    // Log missed/declined call
-    try {
-      await saveModuleData('instant_chat', {
-         type: 'chat_msg', from: currentUser.value, to: from, 
-         text: `Panggilan Tak Terjawab`,
-         isCallLog: true, timestamp: Date.now()
-      });
-      await sendSignal(from, { type: 'hangup' });
-    } catch (e) {
-      console.error('Error declining call:', e);
-    } finally {
-      incomingCall.value = null;
-    }
-  }
-};
-
-const endCall = async (sendHangup = true, { playEndSound = true } = {}) => {
-  const hadActiveCall = !!activeCall.value;
-  stopIncomingRingtone();
-  if (localStream) { 
-    localStream.getTracks().forEach(t => t.stop()); 
-    localStream = null; 
-  }
-  if (peerConnection) { 
-    peerConnection.close(); 
-    peerConnection = null; 
-  }
-  const other = activeCall.value?.other;
-  activeCall.value = null; 
-  callStatus.value = ''; 
-  isCallConnected.value = false;
-
-  if (hadActiveCall && playEndSound) playEndDeclineSound();
-
-  try {
-    if (sendHangup && other) await sendSignal(other, { type: 'hangup' });
-  } catch (e) {
-    console.error('Error sending hangup:', e);
-  }
+  await initiateOutgoingCall(selectedContact.value.username, type);
 };
 
 const refreshUI = async () => {
@@ -658,13 +439,6 @@ const refreshUI = async () => {
         if (currentUser.value && authState.user?.id) {
           migrateInstantChatReadMapOnce(results, currentUser.value, authState.user.id);
         }
-        
-        // Handle RTC Signals (Calling) - Sort ASC by timestamp to process in sequence
-        const signals = results
-          .filter(r => r && r.data && r.data.type === 'rtc_signal' && r.data.to === currentUser.value)
-          .sort((a,b) => (a.data.timestamp || 0) - (b.data.timestamp || 0));
-        
-        for (const s of signals) await handleRtcSignal(s);
 
         // Group messages for Chat List
         const allMsgs = results.filter(r => r && r.data && r.data.type === 'chat_msg');
@@ -789,22 +563,12 @@ const scrollToBottom = (behavior = 'smooth') => { nextTick(() => { if (messageBo
 const openImage = (url) => { previewImage.value = url; };
 const logout = () => { showLogoutConfirm.value = false; window.location.href = '/login'; };
 
-watch(incomingCall, (val) => {
-  if (val) {
-    startIncomingRingtone(val.callType === 'video' ? 'video' : 'audio');
-  } else {
-    stopIncomingRingtone();
-  }
-});
-
 onMounted(async () => {
     if (isLoggedIn.value) { await loadAllRoster(); await refreshUI(); startPolling(); }
 });
 onBeforeUnmount(() => {
-  stopIncomingRingtone();
   clearInterval(pollingInterval);
   clearInterval(onlineInterval);
-  endCall(true, { playEndSound: false });
 });
 watch(isLoggedIn, async (val) => {
     if (val) { await loadAllRoster(); await refreshUI(); startPolling(); }
@@ -962,29 +726,6 @@ watch(isLoggedIn, async (val) => {
 
 .truncate { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hidden { display: none; }
-
-/* Call UI */
-.call-overlay-premium { position: fixed; inset: 0; background: #090e11; z-index: 9000; display: flex; align-items: center; justify-content: center; }
-.call-canvas { position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-.remote-v { width: 100%; height: 100%; object-fit: cover; background: #111b21; }
-.local-v-wrap { position: absolute; bottom: 100px; right: 20px; width: 120px; height: 180px; background: #000; border-radius: 16px; overflow: hidden; border: 2px solid rgba(255,255,255,0.1); box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 10; }
-.local-v { width: 100%; height: 100%; object-fit: cover; }
-.call-info { position: absolute; top: 10%; text-align: center; width: 100%; z-index: 5; }
-.c-avatar { width: 100px; height: 100px; border-radius: 30px; margin: 0 auto 1.5rem; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; font-weight: 800; color: #fff; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
-.call-info h3 { color: #fff; font-size: 1.8rem; font-weight: 800; margin-bottom: 0.5rem; }
-.status-pulse { color: #00a884; font-weight: 700; letter-spacing: 0.1em; animation: pulse 2s infinite; }
-.call-actions { position: absolute; bottom: 40px; width: 100%; display: flex; justify-content: center; gap: 2rem; z-index: 20; }
-.btn-hangup { width: 70px; height: 70px; background: #f43f5e; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 10px 25px rgba(244, 63, 94, 0.4); transition: 0.2s; }
-.btn-hangup:hover { transform: scale(1.1); background: #e11d48; }
-
-.incoming-call-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
-.i-call-card { background: #222e35; width: 100%; max-width: 320px; padding: 3rem 2rem; border-radius: 40px; text-align: center; border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 30px 60px rgba(0,0,0,0.6); }
-.i-avatar { width: 80px; height: 80px; border-radius: 25px; margin: 0 auto 1.5rem; display: flex; align-items: center; justify-content: center; font-size: 2rem; font-weight: 800; color: #fff; }
-.i-actions { display: flex; gap: 1rem; margin-top: 2rem; }
-.btn-decline { flex: 1; height: 54px; background: rgba(244, 63, 94, 0.1); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.2); border-radius: 18px; font-weight: 700; cursor: pointer; }
-.btn-accept { flex: 1; height: 54px; background: #00a884; color: #fff; border: none; border-radius: 18px; font-weight: 800; cursor: pointer; box-shadow: 0 8px 20px rgba(0, 168, 132, 0.3); }
-
-@keyframes pulse { 0% { opacity: 0.6; } 50% { opacity: 1; } 100% { opacity: 0.6; } }
 
 .t-btn:disabled { opacity: 0.3; cursor: not-allowed; filter: grayscale(1); }
 </style>

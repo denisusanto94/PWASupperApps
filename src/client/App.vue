@@ -8,16 +8,67 @@
 
     <header v-if="appHeaderVisible" class="app-header">
       <div class="app-header-container">
-        <router-link v-if="route.path !== '/'" to="/" class="back-link" aria-label="Kembali ke home">
-          <span class="back-icon">←</span>
-        </router-link>
-        
-        <div v-else class="header-brand-placeholder">
-           <h2 class="mini-brand">PWA<span>Supper</span></h2>
+        <div class="header-left-slot">
+          <router-link v-if="route.path !== '/'" to="/" class="back-link" aria-label="Kembali ke home">
+            <span class="back-icon">←</span>
+          </router-link>
+          <div v-else class="header-brand-placeholder">
+            <h2 class="mini-brand">PWA<span>Supper</span></h2>
+          </div>
         </div>
-        
-        <div id="app-header-portal" class="header-portal"></div>
-        
+
+        <div class="header-center-col">
+          <Transition name="rtc-strip-fade">
+            <div
+              v-if="authState.user && rtcState.incomingCall"
+              class="rtc-incoming-strip"
+              :class="{ 'is-minimized': incomingCallBarMinimized }"
+            >
+              <template v-if="!incomingCallBarMinimized">
+                <div class="rtc-incoming-pulse" aria-hidden="true" />
+                <div
+                  class="rtc-incoming-avatar"
+                  :style="{ background: rtcAvatarColor(rtcState.incomingCall.from) }"
+                >
+                  {{ (rtcState.incomingCall.from || '?')[0].toUpperCase() }}
+                </div>
+                <div class="rtc-incoming-text">
+                  <span class="rtc-incoming-label">Panggilan masuk</span>
+                  <span class="rtc-incoming-sub">
+                    {{ rtcState.incomingCall.callType === 'video' ? 'Video' : 'Suara' }} · {{ rtcState.incomingCall.from }}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  class="rtc-incoming-icon-btn"
+                  title="Sembunyikan (kecilkan)"
+                  aria-label="Sembunyikan notifikasi panggilan"
+                  @click="minimizeIncomingStrip"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                </button>
+                <button type="button" class="rtc-btn-reject" @click="declineIncomingCall">Tolak</button>
+                <button type="button" class="rtc-btn-accept" @click="acceptIncomingCall">Angkat</button>
+              </template>
+              <template v-else>
+                <button
+                  type="button"
+                  class="rtc-incoming-chip"
+                  @click="expandIncomingStrip"
+                >
+                  <span class="rtc-incoming-pulse rtc-incoming-pulse--sm" aria-hidden="true" />
+                  <span class="rtc-chip-type">{{ rtcState.incomingCall.callType === 'video' ? 'Video' : 'Suara' }}</span>
+                  <span class="rtc-chip-from">{{ rtcState.incomingCall.from }}</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 15l-6-6-6 6"/></svg>
+                </button>
+                <button type="button" class="rtc-btn-reject rtc-btn-reject--sm" @click.stop="declineIncomingCall">Tolak</button>
+                <button type="button" class="rtc-btn-accept rtc-btn-accept--sm" @click.stop="acceptIncomingCall">Angkat</button>
+              </template>
+            </div>
+          </Transition>
+          <div id="app-header-portal" class="header-portal"></div>
+        </div>
+
         <!-- User Info & Navigation -->
         <div class="user-nav">
           <!-- Logged In State -->
@@ -63,6 +114,33 @@
     <main class="app-main">
       <router-view />
     </main>
+
+    <!-- Panggilan aktif (semua halaman, di atas konten) -->
+    <Transition name="fade">
+      <div v-if="rtcState.activeCall" class="global-call-overlay-premium">
+        <div class="global-call-canvas">
+          <video ref="rtcRemoteVideoRef" autoplay playsinline class="global-remote-v"></video>
+          <div class="global-local-v-wrap" v-show="rtcState.activeCall.callType === 'video'">
+            <video ref="rtcLocalVideoRef" autoplay playsinline muted class="global-local-v"></video>
+          </div>
+          <div class="global-call-info">
+            <div
+              class="global-c-avatar"
+              :style="{ background: rtcAvatarColor(rtcState.activeCall.other) }"
+            >
+              {{ (rtcState.activeCall.other || '?')[0].toUpperCase() }}
+            </div>
+            <h3>{{ rtcState.activeCall.other }}</h3>
+            <p class="global-status-pulse">{{ rtcState.callStatus }}</p>
+          </div>
+          <div class="global-call-actions">
+            <button type="button" @click="endActiveCall(true)" class="global-btn-hangup" title="Akhiri panggilan">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><line x1="23" y1="2" x2="1" y2="22"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -71,9 +149,38 @@ import { computed, onMounted, onBeforeUnmount, watch, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { toastState, showToast } from './toast.js';
 import { authState, setAuth, apiFetch, getModuleData, countInstantChatUnread } from './db.js';
+import {
+  rtcState,
+  incomingCallBarMinimized,
+  processRtcSignalsFromResults,
+  acceptIncomingCall,
+  declineIncomingCall,
+  endActiveCall,
+  registerRtcVideoElements,
+  resetRtcOnLogout,
+} from './instantChatRtc.js';
 
 const route = useRoute();
 const router = useRouter();
+
+const rtcLocalVideoRef = ref(null);
+const rtcRemoteVideoRef = ref(null);
+
+function rtcAvatarColor(name) {
+  if (!name) return '#2a3942';
+  const colors = ['#f43f5e', '#ec4899', '#d946ef', '#a855f7', '#8b5cf6', '#6366f1', '#3b82f6', '#0ea5e9', '#06b6d4', '#10b981'];
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+  return colors[Math.abs(h) % colors.length];
+}
+
+function minimizeIncomingStrip() {
+  incomingCallBarMinimized.value = true;
+}
+
+function expandIncomingStrip() {
+  incomingCallBarMinimized.value = false;
+}
 
 const chatUnreadCount = ref(0);
 const chatUnreadBadge = computed(() =>
@@ -93,6 +200,7 @@ async function pollChatUnread() {
       return;
     }
     chatUnreadCount.value = countInstantChatUnread(rows, authState.user.email, authState.user.id);
+    await processRtcSignalsFromResults(rows);
   } catch {
     chatUnreadCount.value = 0;
   }
@@ -143,6 +251,7 @@ const checkVersion = async () => {
 };
 
 const handleLogout = async () => {
+  resetRtcOnLogout();
   if (authState.user) {
     try {
       await apiFetch('/api/auth/logout', { method: 'POST' });
@@ -193,8 +302,17 @@ watch(() => authState.user, (newVal) => {
     if (idleTimer) clearTimeout(idleTimer);
     stopChatUnreadPoll();
     chatUnreadCount.value = 0;
+    resetRtcOnLogout();
   }
 });
+
+watch(
+  [rtcLocalVideoRef, rtcRemoteVideoRef, () => rtcState.activeCall],
+  () => {
+    registerRtcVideoElements(rtcLocalVideoRef.value, rtcRemoteVideoRef.value);
+  },
+  { flush: 'post' }
+);
 </script>
 
 <style>
@@ -229,11 +347,12 @@ body {
 }
 
 .header-portal {
-  flex-grow: 1;
+  width: 100%;
+  flex-grow: 0;
 }
 
 .app-header {
-  height: 64px;
+  min-height: 64px;
   background: rgba(15, 23, 42, 0.7);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -243,6 +362,7 @@ body {
   z-index: 1000;
   display: flex;
   align-items: center;
+  padding: 0.35rem 0;
 }
 
 .app-header-container {
@@ -252,7 +372,374 @@ body {
   max-width: 1400px;
   margin: 0 auto;
   width: 100%;
-  gap: 1.5rem;
+  gap: 1rem;
+}
+
+.header-left-slot {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.header-center-col {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.rtc-strip-fade-enter-active,
+.rtc-strip-fade-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.rtc-strip-fade-enter-from,
+.rtc-strip-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.rtc-incoming-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: min(100%, 520px);
+  padding: 0.35rem 0.5rem 0.35rem 0.65rem;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.98));
+  border: 1px solid rgba(0, 168, 132, 0.35);
+  border-radius: 999px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  z-index: 2;
+}
+
+/* Mobile & tablet: bar panggilan di bawah app-header (bukan di tengah bar header) */
+@media (max-width: 1023px) {
+  .rtc-incoming-strip {
+    position: fixed;
+    left: max(0.75rem, env(safe-area-inset-left, 0px));
+    right: max(0.75rem, env(safe-area-inset-right, 0px));
+    top: calc(env(safe-area-inset-top, 0px) + 4.75rem);
+    max-width: none;
+    width: auto;
+    z-index: 1002;
+    flex-wrap: wrap;
+    row-gap: 0.3rem;
+    justify-content: center;
+    padding: 0.45rem 0.65rem;
+    border-radius: 1rem;
+    box-shadow:
+      0 4px 24px rgba(0, 0, 0, 0.45),
+      0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+  }
+
+  .rtc-incoming-sub {
+    max-width: min(240px, 55vw);
+  }
+
+  .rtc-incoming-chip {
+    max-width: min(200px, 50vw);
+  }
+}
+
+.rtc-incoming-strip.is-minimized {
+  padding: 0.25rem 0.4rem;
+  gap: 0.35rem;
+}
+
+.rtc-incoming-pulse {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #00a884;
+  flex-shrink: 0;
+  animation: rtc-pulse-dot 1.2s ease-in-out infinite;
+  box-shadow: 0 0 12px rgba(0, 168, 132, 0.8);
+}
+
+.rtc-incoming-pulse--sm {
+  width: 8px;
+  height: 8px;
+}
+
+@keyframes rtc-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+.rtc-incoming-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.rtc-incoming-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+}
+
+.rtc-incoming-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #00a884;
+  line-height: 1.2;
+}
+
+.rtc-incoming-sub {
+  font-size: 0.72rem;
+  color: #cbd5e1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+@media (min-width: 1024px) {
+  .rtc-incoming-sub { max-width: 280px; }
+}
+
+.rtc-incoming-icon-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: #94a3b8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, color 0.2s;
+}
+
+.rtc-incoming-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
+}
+
+.rtc-btn-reject {
+  flex-shrink: 0;
+  padding: 0 0.85rem;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(244, 63, 94, 0.35);
+  background: rgba(244, 63, 94, 0.12);
+  color: #fda4af;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.rtc-btn-reject:hover {
+  background: rgba(244, 63, 94, 0.22);
+}
+
+.rtc-btn-reject--sm {
+  height: 30px;
+  padding: 0 0.65rem;
+  font-size: 0.7rem;
+}
+
+.rtc-btn-accept {
+  flex-shrink: 0;
+  padding: 0 0.95rem;
+  height: 34px;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #00a884, #059669);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 168, 132, 0.35);
+  transition: filter 0.2s, transform 0.15s;
+}
+
+.rtc-btn-accept:hover {
+  filter: brightness(1.08);
+  transform: scale(1.02);
+}
+
+.rtc-btn-accept--sm {
+  height: 30px;
+  padding: 0 0.7rem;
+  font-size: 0.7rem;
+}
+
+.rtc-incoming-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: min(180px, 45vw);
+  padding: 0.2rem 0.5rem 0.2rem 0.35rem;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.rtc-incoming-chip:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.rtc-chip-type {
+  color: #00a884;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.rtc-chip-from {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.global-call-overlay-premium {
+  position: fixed;
+  inset: 0;
+  background: #090e11;
+  z-index: 9500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.global-call-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.global-remote-v {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #111b21;
+}
+
+.global-local-v-wrap {
+  position: absolute;
+  bottom: 100px;
+  right: 20px;
+  width: 120px;
+  height: 180px;
+  background: #000;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  z-index: 10;
+}
+
+.global-local-v {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.global-call-info {
+  position: absolute;
+  top: 10%;
+  text-align: center;
+  width: 100%;
+  z-index: 5;
+}
+
+.global-c-avatar {
+  width: 100px;
+  height: 100px;
+  border-radius: 30px;
+  margin: 0 auto 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: #fff;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.global-call-info h3 {
+  color: #fff;
+  font-size: 1.8rem;
+  font-weight: 800;
+  margin: 0 0 0.5rem;
+}
+
+.global-status-pulse {
+  color: #00a884;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  margin: 0;
+  animation: global-pulse-status 2s infinite;
+}
+
+@keyframes global-pulse-status {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
+}
+
+.global-call-actions {
+  position: absolute;
+  bottom: 40px;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  z-index: 20;
+}
+
+.global-btn-hangup {
+  width: 70px;
+  height: 70px;
+  background: #f43f5e;
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 10px 25px rgba(244, 63, 94, 0.4);
+  transition: 0.2s;
+}
+
+.global-btn-hangup:hover {
+  transform: scale(1.1);
+  background: #e11d48;
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 
 .header-brand-placeholder {

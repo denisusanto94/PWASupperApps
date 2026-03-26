@@ -67,8 +67,8 @@
               </div>
             </div>
 
-            <!-- History Section -->
-            <div class="history-section slide-up" style="animation-delay: 0.3s">
+            <!-- History Section (hanya pengguna login) -->
+            <div v-if="isLoggedIn" class="history-section slide-up" style="animation-delay: 0.3s">
                <div class="section-badge">Recent Captures</div>
                <div class="table-responsive">
                   <table class="modern-table">
@@ -189,7 +189,9 @@ import { ref, onMounted, onUnmounted, computed, nextTick, watch } from 'vue';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { showToast } from '../toast.js';
-import { saveTimestampCapture, getTimestampCaptures } from '../db.js';
+import { authState, saveTimestampCapture, getTimestampCaptures } from '../db.js';
+
+const isLoggedIn = computed(() => !!authState.user);
 
 const video = ref(null);
 const canvas = ref(null);
@@ -428,6 +430,10 @@ const drawOverlay = () => {
 };
 
 const loadHistory = async () => {
+  if (!authState.user) {
+    history.value = [];
+    return;
+  }
   history.value = await getTimestampCaptures();
 };
 
@@ -540,7 +546,7 @@ const saveAndDownload = async () => {
     link.href = imageData;
     link.click();
     showToast('Foto berhasil disimpan.', 'success');
-    await loadHistory();
+    if (authState.user) await loadHistory();
 
   } catch (err) {
     showToast('Gagal menyimpan ke database.', 'error');
@@ -557,10 +563,16 @@ onMounted(() => {
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png',
   });
   getLocation();
-  loadHistory();
+  if (authState.user) loadHistory();
 });
 
-
+watch(
+  () => authState.user,
+  (u) => {
+    if (u) loadHistory();
+    else history.value = [];
+  }
+);
 
 onUnmounted(() => {
   stopCamera();
