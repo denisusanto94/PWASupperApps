@@ -302,7 +302,9 @@ import {
   apiFetch,
   getModuleData, 
   saveModuleData,
-  INSTANT_CHAT_DB_NAME
+  INSTANT_CHAT_DB_NAME,
+  migrateInstantChatReadMapOnce,
+  setChatReadCursor
 } from '../db.js';
 import { showToast } from '../toast.js';
 
@@ -339,6 +341,39 @@ const isCallConnected = ref(false);
 let peerConnection = null;
 let localStream = null;
 const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun2.l.google.com:19302' }] };
+
+const SOUND_VOICE_RING = '/sound/voice-call-ringing.mp3';
+const SOUND_VIDEO_RING = '/sound/video-call-ringing.mp3';
+const SOUND_END_DECLINE = '/sound/end-decline-call.mp3';
+
+let ringingAudio = null;
+
+function stopIncomingRingtone() {
+  if (ringingAudio) {
+    ringingAudio.pause();
+    ringingAudio.currentTime = 0;
+    ringingAudio.loop = false;
+    ringingAudio = null;
+  }
+}
+
+async function startIncomingRingtone(callType) {
+  stopIncomingRingtone();
+  const src = callType === 'video' ? SOUND_VIDEO_RING : SOUND_VOICE_RING;
+  ringingAudio = new Audio(src);
+  ringingAudio.loop = true;
+  try {
+    await ringingAudio.play();
+  } catch {
+    /* autoplay policy: user may need to tap Accept/Decline first */
+  }
+}
+
+function playEndDeclineSound() {
+  stopIncomingRingtone();
+  const a = new Audio(SOUND_END_DECLINE);
+  a.play().catch(() => {});
+}
 
 const SECRET_KEY = 'vault_core_v7.3_mysql';
 
@@ -496,7 +531,10 @@ const handleRtcSignal = async (doc) => {
     if (peerConnection) await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
   } else if (data.type === 'hangup') {
     if (activeCall.value?.other === from) endCall(false);
-    if (incomingCall.value?.from === from) incomingCall.value = null;
+    if (incomingCall.value?.from === from) {
+      playEndDeclineSound();
+      incomingCall.value = null;
+    }
   }
 };
 
@@ -563,6 +601,7 @@ const acceptCall = async () => {
 
 const declineCall = async () => {
   if (incomingCall.value) {
+    playEndDeclineSound();
     const { from } = incomingCall.value;
     
     // Log missed/declined call
@@ -581,7 +620,9 @@ const declineCall = async () => {
   }
 };
 
-const endCall = async (sendHangup = true) => {
+const endCall = async (sendHangup = true, { playEndSound = true } = {}) => {
+  const hadActiveCall = !!activeCall.value;
+  stopIncomingRingtone();
   if (localStream) { 
     localStream.getTracks().forEach(t => t.stop()); 
     localStream = null; 
@@ -594,6 +635,8 @@ const endCall = async (sendHangup = true) => {
   activeCall.value = null; 
   callStatus.value = ''; 
   isCallConnected.value = false;
+
+  if (hadActiveCall && playEndSound) playEndDeclineSound();
 
   try {
     if (sendHangup && other) await sendSignal(other, { type: 'hangup' });
@@ -610,6 +653,10 @@ const refreshUI = async () => {
         if (!Array.isArray(results)) {
             console.warn('Chat data is not an array:', results);
             return;
+        }
+
+        if (currentUser.value && authState.user?.id) {
+          migrateInstantChatReadMapOnce(results, currentUser.value, authState.user.id);
         }
         
         // Handle RTC Signals (Calling) - Sort ASC by timestamp to process in sequence
@@ -658,6 +705,11 @@ const refreshUI = async () => {
                 scrollToBottom();
             } else {
                 messages.value = processed;
+            }
+
+            if (authState.user?.id) {
+              const maxTs = rawMsgs.reduce((mx, a) => Math.max(mx, Number(a.data?.timestamp) || 0), 0);
+              if (maxTs) setChatReadCursor(authState.user.id, other, maxTs);
             }
         }
     } catch (e) {
@@ -737,10 +789,23 @@ const scrollToBottom = (behavior = 'smooth') => { nextTick(() => { if (messageBo
 const openImage = (url) => { previewImage.value = url; };
 const logout = () => { showLogoutConfirm.value = false; window.location.href = '/login'; };
 
+watch(incomingCall, (val) => {
+  if (val) {
+    startIncomingRingtone(val.callType === 'video' ? 'video' : 'audio');
+  } else {
+    stopIncomingRingtone();
+  }
+});
+
 onMounted(async () => {
     if (isLoggedIn.value) { await loadAllRoster(); await refreshUI(); startPolling(); }
 });
-onBeforeUnmount(() => { clearInterval(pollingInterval); clearInterval(onlineInterval); endCall(true); });
+onBeforeUnmount(() => {
+  stopIncomingRingtone();
+  clearInterval(pollingInterval);
+  clearInterval(onlineInterval);
+  endCall(true, { playEndSound: false });
+});
 watch(isLoggedIn, async (val) => {
     if (val) { await loadAllRoster(); await refreshUI(); startPolling(); }
     else { clearInterval(pollingInterval); clearInterval(onlineInterval); }

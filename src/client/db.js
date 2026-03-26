@@ -67,6 +67,83 @@ export async function saveModuleData(moduleName, data, id = null) {
   return await res.json();
 }
 
+// --- Instant Chat: read cursor (local) + unread count ---
+const CHAT_READ_STORAGE = (userId) => `pwa_instant_chat_read:${userId}`;
+const CHAT_READ_MIGRATED = (userId) => `pwa_instant_chat_read_mig:${userId}`;
+
+function readChatReadMap(userId) {
+  if (!userId) return {};
+  try {
+    return JSON.parse(localStorage.getItem(CHAT_READ_STORAGE(userId)) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function writeChatReadMap(userId, map) {
+  if (!userId) return;
+  localStorage.setItem(CHAT_READ_STORAGE(userId), JSON.stringify(map));
+}
+
+/** Sekali per user: anggap semua DM yang sudah ada sampai pesan terakhir = sudah dibaca (unread mulai dari pesan baru setelah deploy). */
+export function migrateInstantChatReadMapOnce(rows, myEmail, userId) {
+  if (!userId || !myEmail || !Array.isArray(rows)) return;
+  if (localStorage.getItem(CHAT_READ_MIGRATED(userId)) === '1') return;
+  const m = readChatReadMap(userId);
+  const perPeer = {};
+  for (const r of rows) {
+    const d = r?.data;
+    if (!d || d.type !== 'chat_msg') continue;
+    const other = d.from === myEmail ? d.to : d.from;
+    if (!other) continue;
+    const t = Number(d.timestamp) || 0;
+    if (!perPeer[other] || t > perPeer[other]) perPeer[other] = t;
+  }
+  for (const [peer, t] of Object.entries(perPeer)) {
+    const cur = m[peer];
+    m[peer] = cur == null ? t : Math.max(Number(cur) || 0, t);
+  }
+  writeChatReadMap(userId, m);
+  localStorage.setItem(CHAT_READ_MIGRATED(userId), '1');
+}
+
+/**
+ * Jumlah pesan chat_msg masuk (from lain → ke email saya) dengan timestamp > cursor baca per lawan bicara.
+ */
+export function countInstantChatUnread(rows, myEmail, userId) {
+  if (!myEmail || !userId || !Array.isArray(rows)) return 0;
+  migrateInstantChatReadMapOnce(rows, myEmail, userId);
+  const m = readChatReadMap(userId);
+  let n = 0;
+  for (const r of rows) {
+    const d = r?.data;
+    if (!d || d.type !== 'chat_msg') continue;
+    if (d.isCallLog) continue;
+    if (d.to !== myEmail || d.from === myEmail) continue;
+    const peer = d.from;
+    const t = Number(d.timestamp) || 0;
+    const last = Number(m[peer]) || 0;
+    if (t > last) n++;
+  }
+  return n;
+}
+
+/** Tandai percakapan dengan peer sampai timestamp ts (ms) sudah dibaca. */
+export function setChatReadCursor(userId, peerEmail, timestamp) {
+  if (!userId || !peerEmail) return;
+  const ts = Number(timestamp) || 0;
+  if (!ts) return;
+  const m = readChatReadMap(userId);
+  const prev = Number(m[peerEmail]) || 0;
+  if (ts >= prev) {
+    m[peerEmail] = ts;
+    writeChatReadMap(userId, m);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pwa-instant-chat-read-updated'));
+    }
+  }
+}
+
 // --- WHATSAPP HELPERS (RE-IMPLEMENTED) ---
 export async function getConnectionDoc() {
   try {

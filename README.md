@@ -16,10 +16,14 @@ Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)
 *   **Clean Navigation**: Antarmuka terpadu tanpa parameter sesi yang membingungkan di URL.
 
 ### 2. Instant Chat (Secure Communication)
+*   **Rute**: `/instant-chat`.
 *   **Keamanan Vault**: Enkripsi identitas **AES-256 GCM** via PBKDF2 (Zero-Visibility Credentials).
 *   **Tambah Chat & Daftar User**: Antarmuka inisiasi sesi yang lebih intuitif dengan pencarian user yang cepat.
 *   **Clean User Roster**: Menyaring (exclude) akun `admin` dan `superadmin` dari daftar percakapan.
+*   **Badge pesan di header**: Setelah login, ikon pesan di app header (kiri menu profil) mengarah ke `/instant-chat` dengan **badge jumlah pesan masuk belum dibaca** (agregat semua lawan bicara). Cursor “sudah dibaca” disimpan per pengguna di `localStorage`; migrasi sekali menandai histori lama agar tidak membanjiri badge. Log panggilan (`isCallLog`) tidak dihitung sebagai unread.
 *   **Real-time Calling (WebRTC)**: Panggilan suara dan video berkualitas tinggi (Peer-to-Peer) dengan penanganan state yang lebih stabil (Robust End-to-End).
+*   **Suara panggilan (penerima)**: Ringtone loop dari `public/sound/` — **suara**: `voice-call-ringing.mp3`, **video**: `video-call-ringing.mp3`. Ringtone berhenti saat jawab, tolak, atau hangup.
+*   **Suara akhir / tolak**: Satu kali `end-decline-call.mp3` saat **decline**, **end call** (tombol tutup atau hangup lawan saat panggilan aktif), atau lawan membatalkan panggilan masuk. Saat **accept**, hanya ringtone yang dihentikan (tanpa suara end).
 *   **Historical Call Logs**: Pencatatan riwayat panggilan otomatis (Masuk, Keluar, Tak Terjawab) ke timeline chat.
 *   **Media Encryption**: Berbagi gambar, video, dan dokumen secara aman.
 
@@ -113,8 +117,11 @@ npm start
 *   `src/server/worker.js`: Background worker pengirim pesan bulk.
 *   `src/server/init_mysql.js`: Skema otomatis & tabel migrasi (`is_guest` standardized, tabel `maps_shareit`).
 *   `scripts/migrate-database.js`: Jalankan via `npm run migrate`.
+*   `src/client/App.vue`: Shell global, header (ikon pesan + badge unread Instant Chat, polling modul `instant_chat`).
 *   `src/client/views/MapsShareItView.vue`: UI Maps ShareIt (peta, form bagikan, popup navigasi).
-*   `src/client/db.js`: Abstraksi data client-side & API Fetcher.
+*   `src/client/views/InstantMessagingView.vue`: UI Instant Chat, WebRTC, ringtone & suara end/decline.
+*   `src/client/db.js`: Abstraksi data client-side & API Fetcher; helper Instant Chat unread (`migrateInstantChatReadMapOnce`, `countInstantChatUnread`, `setChatReadCursor`).
+*   `public/sound/`: Aset audio panggilan Instant Chat (`voice-call-ringing.mp3`, `video-call-ringing.mp3`, `end-decline-call.mp3`).
 
 ---
 **Author**: [denisusanto94@gmail.com](mailto:denisusanto94@gmail.com)  

@@ -26,6 +26,15 @@
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             </router-link>
 
+            <router-link to="/instant-chat" class="nav-icon-link nav-message-link" title="Pesan">
+              <span class="nav-message-wrap">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+                <span v-if="chatUnreadCount > 0" class="nav-message-badge">{{ chatUnreadBadge }}</span>
+              </span>
+            </router-link>
+
             <div class="user-profile-menu">
               <div class="user-info">
                 <span class="user-name-label">{{ authState.user?.full_name || 'User' }}</span>
@@ -58,13 +67,54 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onBeforeUnmount, watch } from 'vue';
+import { computed, onMounted, onBeforeUnmount, watch, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { toastState, showToast } from './toast.js';
-import { authState, setAuth, apiFetch } from './db.js';
+import { authState, setAuth, apiFetch, getModuleData, countInstantChatUnread } from './db.js';
 
 const route = useRoute();
 const router = useRouter();
+
+const chatUnreadCount = ref(0);
+const chatUnreadBadge = computed(() =>
+  chatUnreadCount.value > 99 ? '99+' : String(chatUnreadCount.value)
+);
+let chatUnreadPoll = null;
+
+async function pollChatUnread() {
+  if (!authState.user?.id || !authState.user?.email) {
+    chatUnreadCount.value = 0;
+    return;
+  }
+  try {
+    const rows = await getModuleData('instant_chat');
+    if (!Array.isArray(rows)) {
+      chatUnreadCount.value = 0;
+      return;
+    }
+    chatUnreadCount.value = countInstantChatUnread(rows, authState.user.email, authState.user.id);
+  } catch {
+    chatUnreadCount.value = 0;
+  }
+}
+
+function startChatUnreadPoll() {
+  stopChatUnreadPoll();
+  if (!authState.user?.id || !authState.user?.email) return;
+  pollChatUnread();
+  chatUnreadPoll = setInterval(pollChatUnread, 4000);
+}
+
+function stopChatUnreadPoll() {
+  if (chatUnreadPoll) {
+    clearInterval(chatUnreadPoll);
+    chatUnreadPoll = null;
+  }
+}
+
+function onChatReadUpdated() {
+  pollChatUnread();
+}
 
 const appHeaderVisible = computed(() => {
   if (route.path === '/login') return false;
@@ -91,12 +141,6 @@ const checkVersion = async () => {
     console.warn('Version check failed', e);
   }
 };
-
-onMounted(() => {
-  checkVersion();
-  // Optional: Check every 5 minutes if app is left open
-  setInterval(checkVersion, 5 * 60 * 1000);
-});
 
 const handleLogout = async () => {
   if (authState.user) {
@@ -126,19 +170,30 @@ const resetIdleTimer = () => {
 onMounted(() => {
   checkVersion();
   setInterval(checkVersion, 5 * 60 * 1000);
-  
+
   activityEvents.forEach(ev => window.addEventListener(ev, resetIdleTimer));
   resetIdleTimer();
+
+  window.addEventListener('pwa-instant-chat-read-updated', onChatReadUpdated);
+  if (authState.user?.id) startChatUnreadPoll();
 });
 
 onBeforeUnmount(() => {
   activityEvents.forEach(ev => window.removeEventListener(ev, resetIdleTimer));
   if (idleTimer) clearTimeout(idleTimer);
+  stopChatUnreadPoll();
+  window.removeEventListener('pwa-instant-chat-read-updated', onChatReadUpdated);
 });
 
 watch(() => authState.user, (newVal) => {
-  if (newVal) resetIdleTimer();
-  else if (idleTimer) clearTimeout(idleTimer);
+  if (newVal) {
+    resetIdleTimer();
+    startChatUnreadPoll();
+  } else {
+    if (idleTimer) clearTimeout(idleTimer);
+    stopChatUnreadPoll();
+    chatUnreadCount.value = 0;
+  }
 });
 </script>
 
@@ -250,6 +305,34 @@ body {
 .nav-icon-link:hover {
   color: #3b82f6;
   transform: translateY(-1px);
+}
+
+.nav-message-link {
+  position: relative;
+}
+
+.nav-message-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-message-badge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #f43f5e;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.95);
 }
 
 .user-profile-menu {
