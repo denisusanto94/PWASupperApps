@@ -40,7 +40,8 @@ export const apiFetch = async (url, options = {}) => {
     const response = await fetch(url, { ...options, headers });
     if (response.status === 401) {
       // Don't redirect if we are already on login or guest-friendly pages
-      if (!window.location.pathname.includes('/login') && !window.location.pathname.includes('/timestamp-camera')) {
+      const p = window.location.pathname;
+      if (!p.includes('/login') && !p.includes('/timestamp-camera') && !p.includes('/maps-shareit')) {
         setAuth(null, null);
         window.location.href = '/login';
       }

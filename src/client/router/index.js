@@ -68,6 +68,12 @@ const routes = [
     component: () => import('../views/TimestampCameraView.vue'),
     meta: { title: 'Timestamp Camera' }, // Accessible by Guest
   },
+  {
+    path: '/maps-shareit',
+    name: 'MapsShareIt',
+    component: () => import('../views/MapsShareItView.vue'),
+    meta: { title: 'Maps ShareIt', requiresAuth: false },
+  },
 ];
 
 const router = createRouter({
@@ -94,8 +100,8 @@ router.beforeEach((to, from, next) => {
     return next('/login');
   }
 
-  // 4. Public Access (Home, Camera, Previews)
-  if (to.path === '/' || to.path === '/timestamp-camera' || to.path.startsWith('/wedding-invitation/preview')) {
+  // 4. Public Access (Home, Camera, Maps ShareIt, Previews)
+  if (to.path === '/' || to.path === '/timestamp-camera' || to.path === '/maps-shareit' || to.path.startsWith('/wedding-invitation/preview')) {
     return next();
   }
 

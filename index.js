@@ -286,8 +286,102 @@ const MODNAME_TO_TABLE = {
   'getlynk_id': 'getlynk_id',
   'instant_chat': 'instant_chat',
   'wedding_invitation': 'wedding_invitation',
-  'timestamp_camera': 'timestamp_camera'
+  'timestamp_camera': 'timestamp_camera',
+  'maps_shareit': 'maps_shareit'
 };
+
+// --- Maps ShareIt (publik: daftar lokasi & geocode; kontribusi via POST modul + login) ---
+app.get('/api/maps-shareit/places', async (req, res) => {
+  if (!mysqlPool) return res.status(503).json({ error: 'Database unavailable' });
+  const limit = Math.min(Math.max(parseInt(String(req.query.limit), 10) || 50, 1), 200);
+  const offset = Math.max(parseInt(String(req.query.offset), 10) || 0, 0);
+  try {
+    const [rows] = await mysqlPool.query(
+      `SELECT m.id, m.user_id, m.data, m.updated_at, u.full_name AS contributor_name
+       FROM maps_shareit m
+       LEFT JOIN users u ON m.user_id = u.id
+       WHERE m.data IS NOT NULL AND TRIM(m.data) != ''
+         AND JSON_EXTRACT(m.data, '$.latitude') IS NOT NULL
+         AND JSON_EXTRACT(m.data, '$.longitude') IS NOT NULL
+       ORDER BY m.updated_at DESC
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
+    const items = rows.map((r) => {
+      let d = {};
+      try {
+        d = JSON.parse(r.data || '{}');
+      } catch {
+        /* ignore */
+      }
+      return {
+        id: r.id,
+        contributor_name: r.contributor_name || 'Kontributor',
+        updated_at: r.updated_at,
+        latitude: Number(d.latitude),
+        longitude: Number(d.longitude),
+        komentar: d.komentar || '',
+        kategori: d.kategori || '',
+        addressLabel: d.addressLabel || ''
+      };
+    });
+    res.json({ items, limit, offset });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/maps-shareit/geocode', async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (q.length < 2) return res.status(400).json({ error: 'Masukkan minimal 2 karakter.' });
+  try {
+    const url = new URL('https://nominatim.openstreetmap.org/search');
+    url.searchParams.set('q', q);
+    url.searchParams.set('format', 'json');
+    url.searchParams.set('limit', '10');
+    const r = await fetch(url.toString(), {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'PWASupperApps/1.0 (maps-shareit geocode)'
+      }
+    });
+    if (!r.ok) return res.status(502).json({ error: 'Layanan pencarian alamat tidak tersedia.' });
+    const raw = await r.json();
+    const results = (Array.isArray(raw) ? raw : []).map((x) => ({
+      lat: parseFloat(x.lat),
+      lon: parseFloat(x.lon),
+      display_name: x.display_name
+    }));
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/maps-shareit/reverse', async (req, res) => {
+  const lat = parseFloat(String(req.query.lat ?? ''));
+  const lon = parseFloat(String(req.query.lon ?? ''));
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    return res.status(400).json({ error: 'Koordinat tidak valid.' });
+  }
+  try {
+    const url = new URL('https://nominatim.openstreetmap.org/reverse');
+    url.searchParams.set('lat', String(lat));
+    url.searchParams.set('lon', String(lon));
+    url.searchParams.set('format', 'json');
+    const r = await fetch(url.toString(), {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'PWASupperApps/1.0 (maps-shareit reverse)'
+      }
+    });
+    if (!r.ok) return res.status(502).json({ error: 'Layanan alamat tidak tersedia.' });
+    const data = await r.json();
+    res.json({ display_name: data.display_name || '' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 app.get('/api/modules/:module', authenticate, async (req, res) => {
   const tableName = MODNAME_TO_TABLE[req.params.module];
@@ -360,6 +454,35 @@ app.post('/api/modules/:module', authenticate, async (req, res) => {
        } catch (err) {
          console.error('File Save Error:', err.message);
        }
+    }
+
+    if (req.params.module === 'maps_shareit') {
+      if (!req.user?.id) {
+        return res.status(401).json({ error: 'Login diperlukan untuk berbagi lokasi.' });
+      }
+      const d = finalData || data || {};
+      const lat = Number(d.latitude);
+      const lng = Number(d.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return res.status(400).json({ error: 'Koordinat lokasi tidak valid.' });
+      }
+      if (!String(d.komentar || '').trim()) {
+        return res.status(400).json({ error: 'Komentar wajib diisi.' });
+      }
+      const allowedKat = new Set(['Tempat Makan', 'Cafe', 'Hiburan']);
+      const katRaw = String(d.kategori || '').trim();
+      if (!allowedKat.has(katRaw)) {
+        return res.status(400).json({ error: 'Pilih kategori: Tempat Makan, Cafe, atau Hiburan.' });
+      }
+      finalData = {
+        type: 'place_share',
+        latitude: lat,
+        longitude: lng,
+        kategori: katRaw,
+        komentar: String(d.komentar).trim(),
+        addressLabel: d.addressLabel ? String(d.addressLabel).trim().slice(0, 500) : undefined,
+        createdAt: d.createdAt || new Date().toISOString()
+      };
     }
 
     const dataStr = JSON.stringify(finalData || {});

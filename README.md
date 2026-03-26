@@ -40,7 +40,15 @@ Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)
 *   **Guest Mode Access**: Memungkinkan pembuatan pratinjau tanpa login awal (Self-service).
 *   **Superadmin Role Support**: Dukungan penuh untuk level akses tertinggi aplikasi.
 
-### 6. Admin Panel & Session Management
+### 6. Maps ShareIt (Berbagi Lokasi)
+*   **Rute**: `/maps-shareit` — halaman dapat diakses **tanpa login**; **berbagi lokasi baru** memerlukan login.
+*   **Peta**: **OpenStreetMap** (tiles OSM) dengan **Leaflet**; pencarian alamat lewat proxy **Nominatim** di server.
+*   **Penyimpanan**: Tabel MySQL `maps_shareit`, kolom `data` (JSON) berisi `latitude`, `longitude`, `kategori`, `komentar`, serta `addressLabel` / `createdAt` bila ada.
+*   **Kategori & marker**: **Tempat Makan**, **Cafe**, **Hiburan** — ikon pin berbeda per kategori.
+*   **Kontributor terbaru**: Daftar ringkas di sidebar (nama, kategori, komentar, waktu); popup marker berisi arah ke **OSM Directions**, URI **`geo:`** (aplikasi peta bawaan perangkat), serta tautan **Google Maps** / **Apple Maps**.
+*   **API publik** (tanpa sesi): `GET /api/maps-shareit/places`, `GET /api/maps-shareit/geocode?q=`, `GET /api/maps-shareit/reverse?lat=&lon=`. Kontribusi: `POST /api/modules/maps_shareit` (autentikasi wajib, validasi server).
+
+### 7. Admin Panel & Session Management
 *   **Session Monitor**: Indikator status sesi (Online/Offline) secara visual pada daftar user.
 *   **Force Logout / Reset Sesi**: Kemampuan admin untuk menutup paksa atau mereset sesi aktif user di semua perangkat.
 *   **Admin Multi-Device**: Izin login simultan dari banyak perangkat khusus untuk akun `admin` dan `superadmin`.
@@ -78,7 +86,14 @@ MYSQL_DB=pwa-super-apps
 MYSQL_DROP_ON_START=false
 ```
 
-### 2. Memulai Aplikasi
+### 2. Migrasi skema MySQL
+Menambahkan atau menyelaraskan tabel (termasuk `maps_shareit`) tanpa menghapus data yang ada:
+```bash
+npm run migrate
+```
+Membutuhkan variabel `MYSQL_*` yang valid di `.env`. Skema utama diatur di `src/server/init_mysql.js`; file SQL opsional ada di folder `migrations/`.
+
+### 3. Memulai Aplikasi
 ```bash
 # 1. Instalasi Node Modules
 npm install
@@ -93,10 +108,12 @@ npm start
 ---
 
 ## 📂 Struktur Penting
-*   `index.js`: Entry point server & API Bridge.
+*   `index.js`: Entry point server & API Bridge (termasuk modul `maps_shareit` & endpoint Maps ShareIt publik).
 *   `src/server/baileys.js`: Logika Multi-Session WhatsApp.
 *   `src/server/worker.js`: Background worker pengirim pesan bulk.
-*   `src/server/init_mysql.js`: Skema otomatis & tabel migrasi (`is_guest` standardized).
+*   `src/server/init_mysql.js`: Skema otomatis & tabel migrasi (`is_guest` standardized, tabel `maps_shareit`).
+*   `scripts/migrate-database.js`: Jalankan via `npm run migrate`.
+*   `src/client/views/MapsShareItView.vue`: UI Maps ShareIt (peta, form bagikan, popup navigasi).
 *   `src/client/db.js`: Abstraksi data client-side & API Fetcher.
 
 ---

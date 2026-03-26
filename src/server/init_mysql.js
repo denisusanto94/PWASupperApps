@@ -183,6 +183,19 @@ export async function initMysql(config) {
       )
     `);
 
+    // 13. maps_shareit
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS maps_shareit (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT,
+        data LONGTEXT,
+        is_guest BOOLEAN DEFAULT FALSE,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+    try { await connection.query(`ALTER TABLE maps_shareit ADD COLUMN is_guest BOOLEAN DEFAULT FALSE AFTER data`); } catch(e){}
+
     // --- SEED INITIAL DATA ---
     console.log('🌱 Seeding initial data...');
     

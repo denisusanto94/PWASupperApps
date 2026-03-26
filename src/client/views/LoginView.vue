@@ -110,10 +110,11 @@
 
 <script setup>
 import { ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { setAuth, apiFetch } from '../db.js';
 import { showToast } from '../toast.js';
 
+const route = useRoute();
 const router = useRouter();
 const activeTab = ref('login');
 const loading = ref(false);
@@ -143,7 +144,10 @@ const handleLogin = async () => {
     
     setAuth(data.user, data.sessionId, false);
     showToast('Login berhasil!', 'success');
-    router.push('/');
+    const redir = route.query.redirect;
+    const safe =
+      typeof redir === 'string' && redir.startsWith('/') && !redir.startsWith('//') ? redir : '/';
+    router.push(safe);
   } catch (err) {
     error.value = err.message;
     showToast(err.message, 'error');
