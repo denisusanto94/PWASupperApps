@@ -280,6 +280,90 @@ app.delete('/api/admin/sessions/:userId', authenticate, isAdmin, async (req, res
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+app.get('/api/admin/maps-shareit', authenticate, isAdmin, async (req, res) => {
+  if (!mysqlPool) return res.status(503).json({ error: 'Database unavailable' });
+  const limit = Math.min(Math.max(parseInt(String(req.query.limit), 10) || 200, 1), 500);
+  const offset = Math.max(parseInt(String(req.query.offset), 10) || 0, 0);
+  try {
+    const [countRows] = await mysqlPool.query(
+      `SELECT COUNT(*) AS total FROM maps_shareit WHERE data IS NOT NULL AND TRIM(data) != ''`
+    );
+    const [rows] = await mysqlPool.query(
+      `SELECT m.id, m.user_id, m.data, m.updated_at, u.full_name AS contributor_name, u.email AS contributor_email
+       FROM maps_shareit m
+       LEFT JOIN users u ON m.user_id = u.id
+       WHERE m.data IS NOT NULL AND TRIM(m.data) != ''
+       ORDER BY m.updated_at DESC
+       LIMIT ? OFFSET ?`,
+      [limit, offset]
+    );
+    const items = rows.map((r) => {
+      let d = {};
+      try {
+        d = JSON.parse(r.data || '{}');
+      } catch {
+        /* ignore */
+      }
+      return {
+        id: r.id,
+        user_id: r.user_id,
+        updated_at: r.updated_at,
+        contributor_name: r.contributor_name || '—',
+        contributor_email: r.contributor_email || '—',
+        latitude: d.latitude != null ? Number(d.latitude) : null,
+        longitude: d.longitude != null ? Number(d.longitude) : null,
+        kategori: d.kategori || '',
+        komentar: d.komentar || '',
+        addressLabel: d.addressLabel || '',
+        verified: d.verified === true
+      };
+    });
+    res.json({ items, total: countRows[0]?.total ?? 0, limit, offset });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/api/admin/maps-shareit/:id', authenticate, isAdmin, async (req, res) => {
+  if (!mysqlPool) return res.status(503).json({ error: 'Database unavailable' });
+  const id = parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID tidak valid' });
+  if (typeof req.body?.verified !== 'boolean') {
+    return res.status(400).json({ error: 'Field verified (boolean) wajib.' });
+  }
+  const verified = req.body.verified;
+  try {
+    const [rows] = await mysqlPool.query(`SELECT data FROM maps_shareit WHERE id = ?`, [id]);
+    if (!rows.length) return res.status(404).json({ error: 'Entri tidak ditemukan' });
+    let d = {};
+    try {
+      d = JSON.parse(rows[0].data || '{}');
+    } catch {
+      /* ignore */
+    }
+    if (verified) d.verified = true;
+    else delete d.verified;
+    const dataStr = JSON.stringify(d);
+    await mysqlPool.query(`UPDATE maps_shareit SET data = ? WHERE id = ?`, [dataStr, id]);
+    res.json({ ok: true, verified });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/admin/maps-shareit/:id', authenticate, isAdmin, async (req, res) => {
+  if (!mysqlPool) return res.status(503).json({ error: 'Database unavailable' });
+  const id = parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID tidak valid' });
+  try {
+    const [r] = await mysqlPool.query(`DELETE FROM maps_shareit WHERE id = ?`, [id]);
+    if (r.affectedRows === 0) return res.status(404).json({ error: 'Entri tidak ditemukan' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- MODULE ROUTES ---
 const MODNAME_TO_TABLE = {
   'wa_blaster': 'wa_blaster',
@@ -322,7 +406,8 @@ app.get('/api/maps-shareit/places', async (req, res) => {
         longitude: Number(d.longitude),
         komentar: d.komentar || '',
         kategori: d.kategori || '',
-        addressLabel: d.addressLabel || ''
+        addressLabel: d.addressLabel || '',
+        verified: d.verified === true
       };
     });
     res.json({ items, limit, offset });
@@ -378,6 +463,45 @@ app.get('/api/maps-shareit/reverse', async (req, res) => {
     if (!r.ok) return res.status(502).json({ error: 'Layanan alamat tidak tersedia.' });
     const data = await r.json();
     res.json({ display_name: data.display_name || '' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** Rute OSRM (mesin arah seperti di openstreetmap.org) — proxy untuk hindari CORS. from/to = lat,lon */
+app.get('/api/maps-shareit/route', async (req, res) => {
+  const from = String(req.query.from || '').trim();
+  const to = String(req.query.to || '').trim();
+  let profile = String(req.query.profile || 'driving');
+  const profiles = { driving: 'driving', walking: 'walking', cycling: 'cycling' };
+  if (!profiles[profile]) profile = 'driving';
+
+  const parseLatLon = (s) => {
+    const parts = s.split(',').map((x) => parseFloat(String(x).trim()));
+    if (parts.length !== 2 || !Number.isFinite(parts[0]) || !Number.isFinite(parts[1])) return null;
+    const [lat, lon] = parts;
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+    return { lat, lon };
+  };
+
+  const A = parseLatLon(from);
+  const B = parseLatLon(to);
+  if (!A || !B) {
+    return res.status(400).json({ error: 'Parameter from dan to wajib berformat lat,lon (desimal).' });
+  }
+
+  const coordPath = `${A.lon},${A.lat};${B.lon},${B.lat}`;
+  const url = `https://router.project-osrm.org/route/v1/${profiles[profile]}/${coordPath}?overview=full&geometries=geojson&steps=true&alternatives=false`;
+
+  try {
+    const r = await fetch(url, {
+      headers: { 'User-Agent': 'PWASupperApps/1.0 (maps-shareit route; contact: app owner)' }
+    });
+    const json = await r.json();
+    if (!r.ok) {
+      return res.status(502).json({ error: 'Layanan rute OSRM tidak tersedia.' });
+    }
+    res.json(json);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -474,6 +598,21 @@ app.post('/api/modules/:module', authenticate, async (req, res) => {
       if (!allowedKat.has(katRaw)) {
         return res.status(400).json({ error: 'Pilih kategori: Tempat Makan, Cafe, atau Hiburan.' });
       }
+      let keepVerified = false;
+      if (id) {
+        const [exRows] = await mysqlPool.query(
+          `SELECT data FROM maps_shareit WHERE id = ? AND (user_id = ? OR is_guest = 1)`,
+          [id, req.user.id]
+        );
+        if (exRows.length) {
+          try {
+            const ex = JSON.parse(exRows[0].data || '{}');
+            if (ex.verified === true) keepVerified = true;
+          } catch {
+            /* ignore */
+          }
+        }
+      }
       finalData = {
         type: 'place_share',
         latitude: lat,
@@ -481,7 +620,8 @@ app.post('/api/modules/:module', authenticate, async (req, res) => {
         kategori: katRaw,
         komentar: String(d.komentar).trim(),
         addressLabel: d.addressLabel ? String(d.addressLabel).trim().slice(0, 500) : undefined,
-        createdAt: d.createdAt || new Date().toISOString()
+        createdAt: d.createdAt || new Date().toISOString(),
+        ...(keepVerified ? { verified: true } : {})
       };
     }
 

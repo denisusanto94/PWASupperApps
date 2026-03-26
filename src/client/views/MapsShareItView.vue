@@ -1,5 +1,5 @@
 <template>
-  <div class="ms-page" :class="{ 'ms-page--sharing': shareOpen }">
+  <div ref="pageRoot" class="ms-page" :class="{ 'ms-page--sharing': shareOpen, 'ms-page--dir': dirOpen }">
     <header class="ms-hero">
       <h1 class="ms-title">Maps ShareIt</h1>
       <p class="ms-sub">
@@ -52,7 +52,17 @@
                 <span v-if="p.kategori" class="ms-list-cat" :class="categoryClass(p.kategori)">{{
                   shortCategory(p.kategori)
                 }}</span>
-                <span class="ms-list-name-compact">{{ shortContributorName(p.contributor_name) }}</span>
+                <span class="ms-list-name-compact">
+                  <span v-if="p.verified" class="ms-verified-badge" title="Lokasi terverifikasi" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14">
+                      <path
+                        fill="#1d9bf0"
+                        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1.41 14.5L6.5 12.41l1.41-1.41 2.68 2.68 6.18-6.18 1.41 1.41-7.59 7.59z"
+                      />
+                    </svg>
+                  </span>
+                  <span class="ms-list-name-text">{{ shortContributorName(p.contributor_name) }}</span>
+                </span>
                 <span class="ms-list-meta">{{ formatDateShort(p.updated_at) }}</span>
               </div>
               <p class="ms-list-comment-compact">{{ shortKomentar(p.komentar) }}</p>
@@ -146,6 +156,88 @@
         </div>
       </div>
     </Transition>
+
+    <!-- Petunjuk arah in-app (gaya Google Maps, data OSRM/OSM) -->
+    <Transition name="ms-dir-fade">
+      <div v-if="dirOpen" class="ms-dir-overlay" @click.self="closeDirections">
+        <div class="ms-dir-sheet" role="dialog" aria-labelledby="ms-dir-heading">
+          <div class="ms-dir-drag" aria-hidden="true" />
+          <header class="ms-dir-header">
+            <button type="button" class="ms-dir-close" aria-label="Tutup petunjuk arah" @click="closeDirections">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <h2 id="ms-dir-heading" class="ms-dir-heading">Petunjuk arah</h2>
+            <span class="ms-dir-badge">OSM</span>
+          </header>
+
+          <div class="ms-dir-card">
+            <div class="ms-dir-field ms-dir-field--from">
+              <span class="ms-dir-pin ms-dir-pin--a" aria-hidden="true" />
+              <div class="ms-dir-field-body">
+                <span class="ms-dir-field-label">Asal</span>
+                <p class="ms-dir-field-value">{{ dirOriginLabel || 'Menentukan…' }}</p>
+              </div>
+            </div>
+            <div class="ms-dir-field-line" aria-hidden="true" />
+            <div class="ms-dir-field ms-dir-field--to">
+              <span class="ms-dir-pin ms-dir-pin--b" aria-hidden="true" />
+              <div class="ms-dir-field-body">
+                <span class="ms-dir-field-label">Tujuan</span>
+                <p class="ms-dir-field-value">{{ dirDestLabel }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="ms-dir-actions-row">
+            <button type="button" class="ms-dir-chip-btn" @click="setOriginFromGeolocation">Lokasi saya</button>
+            <button type="button" class="ms-dir-chip-btn" @click="setOriginFromMapCenter">Pusat peta</button>
+            <button type="button" class="ms-dir-chip-btn ms-dir-chip-btn--primary" :disabled="dirLoading" @click="fetchDirections">
+              {{ dirLoading ? 'Menghitung…' : 'Hitung ulang' }}
+            </button>
+          </div>
+
+          <div class="ms-dir-modes" role="tablist" aria-label="Mode perjalanan">
+            <button
+              v-for="m in DIR_PROFILES"
+              :key="m.id"
+              type="button"
+              role="tab"
+              :aria-selected="dirProfile === m.id"
+              class="ms-dir-mode"
+              :class="{ 'ms-dir-mode--active': dirProfile === m.id }"
+              @click="setDirProfile(m.id)"
+            >
+              {{ m.label }}
+            </button>
+          </div>
+
+          <p v-if="dirError" class="ms-dir-error">{{ dirError }}</p>
+
+          <div v-if="dirSummary" class="ms-dir-summary-bar">
+            <span class="ms-dir-summary-time">{{ dirSummary.time }}</span>
+            <span class="ms-dir-summary-dot" aria-hidden="true" />
+            <span class="ms-dir-summary-dist">{{ dirSummary.dist }}</span>
+          </div>
+
+          <div class="ms-dir-steps-wrap">
+            <ol v-if="dirSteps.length" class="ms-dir-steps">
+              <li v-for="(st, idx) in dirSteps" :key="idx" class="ms-dir-step">
+                <div class="ms-dir-step-icon" :class="'ms-dir-step-icon--' + st.icon" aria-hidden="true">
+                  {{ st.symbol }}
+                </div>
+                <div class="ms-dir-step-main">
+                  <p class="ms-dir-step-text">{{ st.text }}</p>
+                  <p class="ms-dir-step-meta">{{ st.meta }}</p>
+                </div>
+              </li>
+            </ol>
+            <p v-else-if="!dirLoading && !dirError && dirOpen" class="ms-dir-steps-empty">Rute akan muncul di sini setelah dihitung.</p>
+          </div>
+
+          <p class="ms-dir-footnote">Rute dari OSRM (proyek terbuka). Bukan layanan resmi Google Maps.</p>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -165,8 +257,29 @@ L.Icon.Default.mergeOptions({
 });
 
 const router = useRouter();
+const pageRoot = ref(null);
 const mapEl = ref(null);
 let map = null;
+let routeGeoLayer = null;
+
+const DIR_PROFILES = [
+  { id: 'driving', label: 'Mobil' },
+  { id: 'walking', label: 'Jalan kaki' },
+  { id: 'cycling', label: 'Sepeda' }
+];
+
+const dirOpen = ref(false);
+const dirProfile = ref('driving');
+const dirLoading = ref(false);
+const dirError = ref('');
+const dirDestLat = ref(null);
+const dirDestLng = ref(null);
+const dirDestLabel = ref('');
+const dirOriginLat = ref(null);
+const dirOriginLng = ref(null);
+const dirOriginLabel = ref('');
+const dirSummary = ref(null);
+const dirSteps = ref([]);
 let tiles = null;
 let contributionsLayer = null;
 let searchMarker = null;
@@ -359,13 +472,18 @@ function refreshContributionMarkers() {
     const m = L.marker([p.latitude, p.longitude], {
       icon: contributionMarkerIcon(idx, p.kategori || 'Tempat Makan')
     });
+    const verifiedHtml = p.verified
+      ? `<span class="ms-popup-verified" title="Lokasi terverifikasi" aria-label="Terverifikasi"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="#1d9bf0" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1.41 14.5L6.5 12.41l1.41-1.41 2.68 2.68 6.18-6.18 1.41 1.41-7.59 7.59z"/></svg></span>`
+      : '';
     const lines = [
-      `<strong>${escapeHtml(p.contributor_name)}</strong>`,
+      `<span class="ms-popup-title-line">${verifiedHtml}<strong>${escapeHtml(p.contributor_name)}</strong></span>`,
       p.kategori ? `<em>${escapeHtml(p.kategori)}</em>` : '',
       escapeHtml(p.komentar || ''),
       p.addressLabel ? `<small>${escapeHtml(p.addressLabel)}</small>` : ''
     ].filter(Boolean);
-    const navHtml = buildPopupDirectionsHtml(p.latitude, p.longitude);
+    const destLbl =
+      [p.addressLabel, p.komentar].find((x) => String(x || '').trim()) || `${p.latitude.toFixed(4)}, ${p.longitude.toFixed(4)}`;
+    const navHtml = buildPopupDirectionsHtml(p.latitude, p.longitude, destLbl);
     m.bindPopup(`<div class="ms-popup">${lines.join('<br/>')}${navHtml}</div>`, {
       maxWidth: 300,
       className: 'ms-leaflet-popup'
@@ -382,11 +500,289 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;');
 }
 
-/** Tombol arah di popup marker: OSM (langsung) + geo / Google / Apple */
-function buildPopupDirectionsHtml(lat, lng) {
+function escapeAttr(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/\n/g, ' ')
+    .trim()
+    .slice(0, 200);
+}
+
+function formatRouteDuration(sec) {
+  const s = Math.round(Number(sec) || 0);
+  if (s < 60) return `${s} dtk`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} menit`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  return rm ? `${h} j ${rm} m` : `${h} j`;
+}
+
+function formatRouteDistance(meters) {
+  const m = Number(meters) || 0;
+  if (m < 1000) return `${Math.round(m)} m`;
+  return `${(m / 1000).toFixed(1)} km`;
+}
+
+function formatStepDistance(meters) {
+  return formatRouteDistance(meters);
+}
+
+function maneuverIcon(maneuver) {
+  const t = (maneuver?.type || '').toLowerCase();
+  const mod = (maneuver?.modifier || '').toLowerCase();
+  if (t === 'depart') return 'start';
+  if (t === 'arrive') return 'end';
+  if (t === 'roundabout' || t === 'rotary' || t === 'exit roundabout' || t === 'roundabout turn') return 'roundabout';
+  if (mod.includes('uturn')) return 'uturn';
+  if (mod === 'sharp left' || mod === 'left') return 'left';
+  if (mod === 'slight left') return 'slight-left';
+  if (mod === 'sharp right' || mod === 'right') return 'right';
+  if (mod === 'slight right') return 'slight-right';
+  return 'straight';
+}
+
+const STEP_SYMBOLS = {
+  start: 'A',
+  end: 'B',
+  left: '←',
+  'slight-left': '↖',
+  right: '→',
+  'slight-right': '↗',
+  straight: '↑',
+  uturn: '⇄',
+  roundabout: '↻'
+};
+
+function stepSymbolForIcon(icon) {
+  return STEP_SYMBOLS[icon] || '·';
+}
+
+function stepInstruction(step) {
+  const m = step.maneuver || {};
+  const type = (m.type || '').toLowerCase();
+  const mod = (m.modifier || '').toLowerCase();
+  const name = step.name && String(step.name).trim() ? step.name : 'jalan terus';
+
+  if (type === 'depart') return `Mulai dari ${name}`;
+  if (type === 'arrive') return `Tiba di tujuan`;
+  if (type === 'roundabout' || type === 'rotary' || type === 'roundabout turn') {
+    const exit = m.exit != null ? `, keluar ke-${m.exit}` : '';
+    return `Masuk bundaran${exit} menuju ${name}`;
+  }
+  const turnMsg = {
+    left: 'Belok kiri',
+    right: 'Belok kanan',
+    'slight left': 'Belok sedikit ke kiri',
+    'slight right': 'Belok sedikit ke kanan',
+    'sharp left': 'Belok tajam ke kiri',
+    'sharp right': 'Belok tajam ke kanan',
+    uturn: 'Putar balik'
+  };
+  if (turnMsg[mod]) return `${turnMsg[mod]} menuju ${name}`;
+  if (type === 'turn') return `Belok menuju ${name}`;
+  if (type === 'merge') return `Gabung ke ${name}`;
+  if (type === 'fork') return `Ambil cabang ke ${name}`;
+  if (type === 'end of road') return `Di ujung jalan, belok menuju ${name}`;
+  if (type === 'continue' || type === 'new name') return `Lanjut ke ${name}`;
+  return `Menuju ${name}`;
+}
+
+function buildDirStepsFromLeg(steps) {
+  return (steps || []).map((step) => {
+    const maneuver = step.maneuver || {};
+    const icon = maneuverIcon(maneuver);
+    return {
+      icon,
+      symbol: stepSymbolForIcon(icon),
+      text: stepInstruction(step),
+      meta: formatStepDistance(step.distance)
+    };
+  });
+}
+
+function clearRouteOverlay() {
+  if (routeGeoLayer && map) {
+    map.removeLayer(routeGeoLayer);
+    routeGeoLayer = null;
+  }
+}
+
+function drawRouteGeometry(geometry) {
+  clearRouteOverlay();
+  if (!map || !geometry?.coordinates?.length) return;
+  routeGeoLayer = L.geoJSON(geometry, {
+    style: {
+      color: '#1a73e8',
+      weight: 5,
+      opacity: 0.92,
+      lineCap: 'round',
+      lineJoin: 'round'
+    }
+  }).addTo(map);
+  try {
+    map.fitBounds(routeGeoLayer.getBounds(), { padding: [48, 48], maxZoom: 16, animate: true });
+  } catch {
+    /* ignore */
+  }
+}
+
+async function refreshOriginLabel() {
+  if (!Number.isFinite(dirOriginLat.value) || !Number.isFinite(dirOriginLng.value)) return;
+  try {
+    const r = await fetch(
+      `/api/maps-shareit/reverse?lat=${encodeURIComponent(dirOriginLat.value)}&lon=${encodeURIComponent(dirOriginLng.value)}`
+    );
+    const j = await r.json();
+    dirOriginLabel.value =
+      j.display_name || `${dirOriginLat.value.toFixed(5)}, ${dirOriginLng.value.toFixed(5)}`;
+  } catch {
+    dirOriginLabel.value = `${dirOriginLat.value.toFixed(5)}, ${dirOriginLng.value.toFixed(5)}`;
+  }
+}
+
+async function fetchDirections() {
+  if (!map || !Number.isFinite(dirDestLat.value) || !Number.isFinite(dirDestLng.value)) return;
+  let oLat = dirOriginLat.value;
+  let oLng = dirOriginLng.value;
+  if (!Number.isFinite(oLat) || !Number.isFinite(oLng)) {
+    const c = map.getCenter();
+    oLat = c.lat;
+    oLng = c.lng;
+    dirOriginLat.value = oLat;
+    dirOriginLng.value = oLng;
+    await refreshOriginLabel();
+  }
+
+  dirLoading.value = true;
+  dirError.value = '';
+  dirSummary.value = null;
+  dirSteps.value = [];
+  clearRouteOverlay();
+
+  const from = `${oLat},${oLng}`;
+  const to = `${dirDestLat.value},${dirDestLng.value}`;
+  try {
+    const res = await fetch(
+      `/api/maps-shareit/route?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&profile=${encodeURIComponent(dirProfile.value)}`
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Rute gagal');
+    if (data.code !== 'Ok' || !data.routes?.[0]) {
+      const hint =
+        data.code === 'NoRoute'
+          ? 'Tidak ada rute jalan antara asal dan tujuan (coba mode Jalan kaki atau geser titik asal).'
+          : 'Tidak ada rute untuk titik ini.';
+      throw new Error(data.message || hint);
+    }
+    const r = data.routes[0];
+    if (r.geometry) drawRouteGeometry(r.geometry);
+    dirSummary.value = {
+      time: formatRouteDuration(r.duration),
+      dist: formatRouteDistance(r.distance)
+    };
+    const leg = r.legs?.[0];
+    dirSteps.value = buildDirStepsFromLeg(leg?.steps);
+  } catch (e) {
+    dirError.value = e.message || 'Gagal memuat rute';
+  } finally {
+    dirLoading.value = false;
+  }
+}
+
+function setDirProfile(id) {
+  if (!DIR_PROFILES.some((p) => p.id === id)) return;
+  dirProfile.value = id;
+  if (dirOpen.value && Number.isFinite(dirOriginLat.value) && Number.isFinite(dirDestLat.value)) {
+    fetchDirections();
+  }
+}
+
+function setOriginFromMapCenter() {
+  if (!map) return;
+  const c = map.getCenter();
+  dirOriginLat.value = c.lat;
+  dirOriginLng.value = c.lng;
+  refreshOriginLabel();
+  if (dirOpen.value) fetchDirections();
+}
+
+function setOriginFromGeolocation() {
+  if (!navigator.geolocation) {
+    showToast('Peramban tidak mendukung lokasi', 'error');
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      dirOriginLat.value = pos.coords.latitude;
+      dirOriginLng.value = pos.coords.longitude;
+      await refreshOriginLabel();
+      if (dirOpen.value) fetchDirections();
+    },
+    () => showToast('Lokasi tidak tersedia atau ditolak', 'error'),
+    { enableHighAccuracy: true, timeout: 12000 }
+  );
+}
+
+function openDirectionsPanel(lat, lng, label) {
+  dirDestLat.value = lat;
+  dirDestLng.value = lng;
+  dirDestLabel.value = label || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+  dirOpen.value = true;
+  dirError.value = '';
+  dirSteps.value = [];
+  dirSummary.value = null;
+  clearRouteOverlay();
+  map?.closePopup();
+
+  const runFetch = async () => {
+    await refreshOriginLabel();
+    await fetchDirections();
+  };
+
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        dirOriginLat.value = pos.coords.latitude;
+        dirOriginLng.value = pos.coords.longitude;
+        runFetch();
+      },
+      () => {
+        setOriginFromMapCenter();
+      },
+      { enableHighAccuracy: true, timeout: 9000 }
+    );
+  } else {
+    setOriginFromMapCenter();
+  }
+}
+
+function closeDirections() {
+  dirOpen.value = false;
+  clearRouteOverlay();
+}
+
+function onMapShareDirectionsClick(ev) {
+  const el = ev.target.closest('[data-ms-directions]');
+  if (!el) return;
+  ev.preventDefault();
+  ev.stopPropagation();
+  const lat = parseFloat(el.getAttribute('data-lat') || '');
+  const lng = parseFloat(el.getAttribute('data-lng') || '');
+  const label = el.getAttribute('data-label') || '';
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+  openDirectionsPanel(lat, lng, label);
+  map?.closePopup();
+}
+
+/** Popup marker: petunjuk arah in-app (OSRM) + tautan lain */
+function buildPopupDirectionsHtml(lat, lng, destLabel) {
   const la = Number(lat);
   const ln = Number(lng);
   if (!Number.isFinite(la) || !Number.isFinite(ln)) return '';
+  const labelEsc = escapeAttr(destLabel || `${la.toFixed(4)}, ${ln.toFixed(4)}`);
   const osmRoute = encodeURIComponent(`;${la},${ln}`);
   const osmUrl = `https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=${osmRoute}`;
   const googleDirUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${la},${ln}`)}`;
@@ -394,9 +790,13 @@ function buildPopupDirectionsHtml(lat, lng) {
   const geoUrl = `geo:${la},${ln}?q=${encodeURIComponent(`${la},${ln}`)}`;
   return `
     <div class="ms-popup-actions">
-      <a class="ms-popup-dir-btn ms-popup-dir-btn--osm" href="${osmUrl}" target="_blank" rel="noopener noreferrer">Ikuti peta — arah di OSM</a>
+      <button type="button" class="ms-popup-dir-btn ms-popup-dir-btn--osm" data-ms-directions data-lat="${la}" data-lng="${ln}" data-label="${labelEsc}">
+        Petunjuk arah (peta OSM)
+      </button>
+      <p class="ms-popup-dir-osm-note">Tampilan petunjuk langkah demi langkah di aplikasi — data jalan dari OpenStreetMap / OSRM.</p>
+      <a class="ms-popup-dir-external-osm" href="${osmUrl}" target="_blank" rel="noopener noreferrer">Buka di situs OpenStreetMap</a>
       <a class="ms-popup-dir-btn ms-popup-dir-btn--geo" href="${geoUrl}" rel="noopener noreferrer">Ikuti peta — aplikasi bawaan</a>
-      <p class="ms-popup-dir-hint">Pihak ketiga (Google / Apple / lainnya di browser):</p>
+      <p class="ms-popup-dir-hint">Pihak ketiga (Google / Apple):</p>
       <div class="ms-popup-dir-alt">
         <a href="${googleDirUrl}" target="_blank" rel="noopener noreferrer">Google Maps</a>
         <span class="ms-popup-dir-sep" aria-hidden="true">·</span>
@@ -586,9 +986,14 @@ onMounted(() => {
   contributionsLayer = L.layerGroup().addTo(map);
   setTimeout(() => map.invalidateSize(), 200);
   fetchPlaces();
+  nextTick(() => {
+    pageRoot.value?.addEventListener('click', onMapShareDirectionsClick);
+  });
 });
 
 onUnmounted(() => {
+  pageRoot.value?.removeEventListener('click', onMapShareDirectionsClick);
+  clearRouteOverlay();
   if (reverseTimer) clearTimeout(reverseTimer);
   if (mapClickHandler && map) map.off('click', mapClickHandler);
   if (formMarker && map) map.removeLayer(formMarker);
@@ -864,12 +1269,30 @@ onUnmounted(() => {
 .ms-list-name-compact {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
   font-weight: 600;
   color: #f1f5f9;
   font-size: 0.8rem;
+}
+
+.ms-list-name-text {
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.ms-verified-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
+}
+
+.ms-verified-badge svg {
+  display: block;
 }
 
 .ms-list-meta {
@@ -1194,6 +1617,384 @@ onUnmounted(() => {
   justify-content: flex-end;
 }
 
+/* --- Petunjuk arah (gaya kartu Google Maps, data OSRM) --- */
+.ms-dir-fade-enter-active,
+.ms-dir-fade-leave-active {
+  transition: opacity 0.22s ease;
+}
+.ms-dir-fade-enter-active .ms-dir-sheet,
+.ms-dir-fade-leave-active .ms-dir-sheet {
+  transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.ms-dir-fade-enter-from,
+.ms-dir-fade-leave-to {
+  opacity: 0;
+}
+.ms-dir-fade-enter-from .ms-dir-sheet,
+.ms-dir-fade-leave-to .ms-dir-sheet {
+  transform: translateY(100%);
+}
+
+.ms-dir-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.ms-dir-sheet {
+  width: 100%;
+  max-width: 520px;
+  max-height: min(88vh, 720px);
+  background: #fff;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ms-dir-drag {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  margin: 0.5rem auto 0.25rem;
+  flex-shrink: 0;
+}
+
+.ms-dir-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem 0.65rem 0.35rem;
+  border-bottom: 1px solid #e8eaed;
+  background: linear-gradient(180deg, #f8fafc 0%, #fff 100%);
+  flex-shrink: 0;
+}
+
+.ms-dir-close {
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #5f6368;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ms-dir-close:hover {
+  background: #f1f3f4;
+}
+
+.ms-dir-heading {
+  flex: 1;
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #202124;
+  letter-spacing: -0.02em;
+}
+
+.ms-dir-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #1a73e8;
+  background: #e8f0fe;
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+  margin-right: 0.35rem;
+}
+
+.ms-dir-card {
+  margin: 0.75rem 1rem 0;
+  padding: 0.5rem 0.65rem;
+  background: #fff;
+  border: 1px solid #e8eaed;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08);
+}
+
+.ms-dir-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.35rem 0;
+}
+
+.ms-dir-field-line {
+  width: 2px;
+  height: 12px;
+  margin-left: 11px;
+  background: linear-gradient(180deg, #34a853, #ea4335);
+  border-radius: 2px;
+  opacity: 0.85;
+}
+
+.ms-dir-pin {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-top: 0.35rem;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px currentColor;
+}
+
+.ms-dir-pin--a {
+  color: #34a853;
+  background: #34a853;
+}
+
+.ms-dir-pin--b {
+  color: #ea4335;
+  background: #ea4335;
+}
+
+.ms-dir-field-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.ms-dir-field-label {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #5f6368;
+  margin-bottom: 0.1rem;
+}
+
+.ms-dir-field-value {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #202124;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.ms-dir-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.65rem 1rem 0.35rem;
+}
+
+.ms-dir-chip-btn {
+  border: 1px solid #dadce0;
+  background: #fff;
+  color: #1a73e8;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.ms-dir-chip-btn:hover {
+  background: #f8f9fa;
+}
+
+.ms-dir-chip-btn--primary {
+  background: #1a73e8;
+  color: #fff;
+  border-color: #1a73e8;
+}
+
+.ms-dir-chip-btn--primary:hover:not(:disabled) {
+  background: #1557b0;
+  border-color: #1557b0;
+}
+
+.ms-dir-chip-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ms-dir-modes {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.35rem 1rem 0.5rem;
+  border-bottom: 1px solid #e8eaed;
+}
+
+.ms-dir-mode {
+  flex: 1;
+  border: 1px solid #dadce0;
+  background: #fff;
+  color: #5f6368;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.45rem 0.35rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.ms-dir-mode--active {
+  background: #e8f0fe;
+  color: #1a73e8;
+  border-color: #aecbfa;
+}
+
+.ms-dir-error {
+  margin: 0.5rem 1rem 0;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.78rem;
+  color: #c5221f;
+  background: #fce8e6;
+  border-radius: 8px;
+}
+
+.ms-dir-summary-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1rem;
+  background: #e8f0fe;
+  border-bottom: 1px solid #d2e3fc;
+  flex-shrink: 0;
+}
+
+.ms-dir-summary-time {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: #202124;
+}
+
+.ms-dir-summary-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #5f6368;
+  opacity: 0.5;
+}
+
+.ms-dir-summary-dist {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #5f6368;
+}
+
+.ms-dir-steps-wrap {
+  flex: 1;
+  min-height: 120px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ms-dir-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0.5rem 0 1rem;
+}
+
+.ms-dir-step {
+  display: flex;
+  gap: 0.65rem;
+  padding: 0.55rem 1rem;
+  border-bottom: 1px solid #f1f3f4;
+}
+
+.ms-dir-step:last-child {
+  border-bottom: none;
+}
+
+.ms-dir-step-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #e8f0fe;
+  color: #1a73e8;
+  font-size: 0.95rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ms-dir-step-icon--start {
+  background: #e6f4ea;
+  color: #137333;
+}
+
+.ms-dir-step-icon--end {
+  background: #fce8e6;
+  color: #c5221f;
+}
+
+.ms-dir-step-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.ms-dir-step-text {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #202124;
+  line-height: 1.4;
+}
+
+.ms-dir-step-meta {
+  margin: 0.2rem 0 0;
+  font-size: 0.7rem;
+  color: #5f6368;
+}
+
+.ms-dir-steps-empty {
+  margin: 1rem 1.25rem;
+  font-size: 0.8rem;
+  color: #5f6368;
+  text-align: center;
+}
+
+.ms-dir-footnote {
+  margin: 0;
+  padding: 0.5rem 1rem 0.85rem;
+  font-size: 0.65rem;
+  color: #80868b;
+  text-align: center;
+  border-top: 1px solid #e8eaed;
+  flex-shrink: 0;
+}
+
+@media (min-width: 960px) {
+  .ms-dir-fade-enter-from .ms-dir-sheet,
+  .ms-dir-fade-leave-to .ms-dir-sheet {
+    transform: translateX(100%);
+  }
+
+  .ms-dir-overlay {
+    align-items: stretch;
+    justify-content: flex-end;
+    background: rgba(15, 23, 42, 0.25);
+  }
+
+  .ms-dir-sheet {
+    max-width: 400px;
+    max-height: none;
+    height: 100%;
+    border-radius: 0;
+    margin: 0;
+  }
+
+  .ms-dir-drag {
+    display: none;
+  }
+}
+
 .ms-sheet-enter-active,
 .ms-sheet-leave-active {
   transition: opacity 0.2s ease;
@@ -1227,6 +2028,20 @@ onUnmounted(() => {
   color: #1e293b;
 }
 
+.ms-popup-title-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.ms-popup-verified {
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
+  flex-shrink: 0;
+}
+
 .ms-popup em {
   display: block;
   font-style: normal;
@@ -1258,24 +2073,50 @@ onUnmounted(() => {
   line-height: 1.3;
 }
 
-/* Leaflet default `a` di popup sering menimpa warna — paksa putih untuk tombol OSM */
+/* Tombol petunjuk arah (biru, seperti CTA Google) — anchor & button */
 .ms-popup .ms-popup-dir-btn--osm,
 .ms-popup .ms-popup-dir-btn--osm:link,
 .ms-popup .ms-popup-dir-btn--osm:visited,
 .ms-popup .ms-popup-dir-btn--osm:hover,
 .ms-popup .ms-popup-dir-btn--osm:active,
-.leaflet-popup-content a.ms-popup-dir-btn--osm {
-  background: #2563eb;
-  border-color: #1d4ed8;
+.leaflet-popup-content a.ms-popup-dir-btn--osm,
+.leaflet-popup-content button.ms-popup-dir-btn--osm {
+  background: #1a73e8;
+  border-color: #1557b0;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #fff;
+  font-family: inherit;
+  cursor: pointer;
+  border-style: solid;
+  border-width: 1px;
+}
+
+.ms-popup .ms-popup-dir-btn--osm:hover,
+.leaflet-popup-content a.ms-popup-dir-btn--osm:hover,
+.leaflet-popup-content button.ms-popup-dir-btn--osm:hover {
+  filter: brightness(1.06);
   color: #ffffff !important;
   -webkit-text-fill-color: #fff;
 }
 
-.ms-popup .ms-popup-dir-btn--osm:hover,
-.leaflet-popup-content a.ms-popup-dir-btn--osm:hover {
-  filter: brightness(1.06);
-  color: #ffffff !important;
-  -webkit-text-fill-color: #fff;
+.ms-popup-dir-osm-note {
+  margin: 0.35rem 0 0.25rem;
+  font-size: 0.62rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.ms-popup-dir-external-osm {
+  display: block;
+  margin-bottom: 0.45rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #1a73e8;
+  text-decoration: none;
+}
+
+.ms-popup-dir-external-osm:hover {
+  text-decoration: underline;
 }
 
 .ms-popup-dir-btn--geo {

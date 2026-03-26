@@ -47,16 +47,25 @@ Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)
 ### 6. Maps ShareIt (Berbagi Lokasi)
 *   **Rute**: `/maps-shareit` — halaman dapat diakses **tanpa login**; **berbagi lokasi baru** memerlukan login.
 *   **Peta**: **OpenStreetMap** (tiles OSM) dengan **Leaflet**; pencarian alamat lewat proxy **Nominatim** di server.
+*   **Arah dalam aplikasi**: Rute **OSRM** (profil mengemudi/jalan/kendaraan) di-proxy lewat `GET /api/maps-shareit/route` untuk menghindari CORS; panel arah di popup marker.
 *   **Penyimpanan**: Tabel MySQL `maps_shareit`, kolom `data` (JSON) berisi `latitude`, `longitude`, `kategori`, `komentar`, serta `addressLabel` / `createdAt` bila ada.
+*   **Verifikasi (admin)**: Field opsional `verified: true` di JSON — ditetapkan hanya dari panel admin. Di peta publik, entri terverifikasi menampilkan **ikon centang biru** di **popup Leaflet** dan di **daftar sidebar** (kontributor terbaru).
+*   **Edit kontribusi**: Saat pengguna mengubah lokasinya sendiri, flag `verified` yang sudah diset admin **dipertahankan** oleh server (bukan di-set dari klien).
 *   **Kategori & marker**: **Tempat Makan**, **Cafe**, **Hiburan** — ikon pin berbeda per kategori.
-*   **Kontributor terbaru**: Daftar ringkas di sidebar (nama, kategori, komentar, waktu); popup marker berisi arah ke **OSM Directions**, URI **`geo:`** (aplikasi peta bawaan perangkat), serta tautan **Google Maps** / **Apple Maps**.
-*   **API publik** (tanpa sesi): `GET /api/maps-shareit/places`, `GET /api/maps-shareit/geocode?q=`, `GET /api/maps-shareit/reverse?lat=&lon=`. Kontribusi: `POST /api/modules/maps_shareit` (autentikasi wajib, validasi server).
+*   **Kontributor terbaru**: Daftar ringkas di sidebar (nama, kategori, komentar, waktu); popup marker berisi petunjuk arah (OSRM), **OSM Directions**, URI **`geo:`**, serta tautan **Google Maps** / **Apple Maps** (sesuai implementasi UI).
+*   **API publik** (tanpa sesi): `GET /api/maps-shareit/places` (response menyertakan `verified`), `GET /api/maps-shareit/geocode?q=`, `GET /api/maps-shareit/reverse?lat=&lon=`, `GET /api/maps-shareit/route?from=&to=&profile=`. Kontribusi: `POST /api/modules/maps_shareit` (autentikasi wajib, validasi server).
 
 ### 7. Admin Panel & Session Management
+*   **Rute**: `/admin` — akses **admin** / **superadmin** (sesuai kebijakan auth aplikasi).
+*   **Tab Users Management**: Daftar pengguna, reset sesi, hapus user (bukan akun admin utama yang dilindungi).
+*   **Tab Maps Shareit Management**: Daftar kontribusi `maps_shareit` dengan pencarian; **toggle on/off verifikasi** per baris (memanggil API patch); hapus kontribusi.
+*   **Konfirmasi**: Tindakan destruktif atau sensitif (**hapus user**, **hapus kontribusi Maps**, **reset sesi**) memakai **modal konfirmasi** di dalam aplikasi, bukan `window.confirm` / `alert` bawaan browser.
 *   **Session Monitor**: Indikator status sesi (Online/Offline) secara visual pada daftar user.
 *   **Force Logout / Reset Sesi**: Kemampuan admin untuk menutup paksa atau mereset sesi aktif user di semua perangkat.
 *   **Admin Multi-Device**: Izin login simultan dari banyak perangkat khusus untuk akun `admin` dan `superadmin`.
 *   **Idle Auto-Logout**: Keamanan otomatis yang menutup sesi jika pengguna tidak aktif selama 30 menit.
+
+**API admin Maps ShareIt** (sesi admin): `GET /api/admin/maps-shareit`, `PATCH /api/admin/maps-shareit/:id` (body `{ "verified": true|false }`), `DELETE /api/admin/maps-shareit/:id`.
 
 ---
 
@@ -118,7 +127,8 @@ npm start
 *   `src/server/init_mysql.js`: Skema otomatis & tabel migrasi (`is_guest` standardized, tabel `maps_shareit`).
 *   `scripts/migrate-database.js`: Jalankan via `npm run migrate`.
 *   `src/client/App.vue`: Shell global, header (ikon pesan + badge unread Instant Chat, polling modul `instant_chat`).
-*   `src/client/views/MapsShareItView.vue`: UI Maps ShareIt (peta, form bagikan, popup navigasi).
+*   `src/client/views/MapsShareItView.vue`: UI Maps ShareIt (peta, form bagikan, popup navigasi & verifikasi).
+*   `src/client/views/AdminView.vue`: Panel admin (Users, Maps Shareit Management, toggle verifikasi, modal konfirmasi).
 *   `src/client/views/InstantMessagingView.vue`: UI Instant Chat, WebRTC, ringtone & suara end/decline.
 *   `src/client/db.js`: Abstraksi data client-side & API Fetcher; helper Instant Chat unread (`migrateInstantChatReadMapOnce`, `countInstantChatUnread`, `setChatReadCursor`).
 *   `public/sound/`: Aset audio panggilan Instant Chat (`voice-call-ringing.mp3`, `video-call-ringing.mp3`, `end-decline-call.mp3`).
