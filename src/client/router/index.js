@@ -74,6 +74,18 @@ const routes = [
     component: () => import('../views/MapsShareItView.vue'),
     meta: { title: 'Maps ShareIt', requiresAuth: false },
   },
+  {
+    path: '/vconference',
+    name: 'Vconference',
+    component: () => import('../views/VconferenceView.vue'),
+    meta: { title: 'Meeting Online', requiresAuth: true },
+  },
+  {
+    path: '/vconference/room/:code',
+    name: 'VconferenceRoom',
+    component: () => import('../views/VconferenceView.vue'),
+    meta: { title: 'Room Meeting', requiresAuth: true },
+  },
 ];
 
 const router = createRouter({

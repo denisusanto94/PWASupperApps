@@ -86,6 +86,57 @@
               </span>
             </router-link>
 
+            <div ref="notifWrapRef" class="nav-notif-wrap">
+              <button
+                type="button"
+                class="nav-icon-link nav-notif-btn"
+                title="Notifikasi"
+                aria-label="Notifikasi"
+                aria-haspopup="true"
+                :aria-expanded="notifPanelOpen"
+                @click.stop="toggleNotifPanel"
+              >
+                <span class="nav-notif-inner">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                  </svg>
+                  <span v-if="notifUnreadCount > 0" class="nav-notif-badge">{{ notifUnreadBadge }}</span>
+                </span>
+              </button>
+              <Transition name="notif-panel-fade">
+                <div v-if="notifPanelOpen" ref="notifPanelRef" class="nav-notif-panel" role="menu" @click.stop>
+                  <div class="nav-notif-head">
+                    <span class="nav-notif-title">Notifikasi</span>
+                    <button
+                      v-if="notifUnreadCount > 0"
+                      type="button"
+                      class="nav-notif-readall"
+                      @click="markAllNotificationsRead"
+                    >
+                      Tandai dibaca
+                    </button>
+                  </div>
+                  <div class="nav-notif-list">
+                    <p v-if="notifLoading" class="nav-notif-empty">Memuat…</p>
+                    <p v-else-if="!notifItems.length" class="nav-notif-empty">Tidak ada notifikasi.</p>
+                    <button
+                      v-for="it in notifItems"
+                      :key="it.id"
+                      type="button"
+                      class="nav-notif-item"
+                      :class="{ 'is-unread': !it.read_at }"
+                      @click="openNotificationItem(it)"
+                    >
+                      <span class="nav-notif-item-title">{{ it.title }}</span>
+                      <span class="nav-notif-item-body">{{ it.body }}</span>
+                      <span class="nav-notif-item-time">{{ formatNotifTime(it.created_at) }}</span>
+                    </button>
+                  </div>
+                </div>
+              </Transition>
+            </div>
+
             <div class="user-profile-menu">
               <div class="user-info">
                 <span class="user-name-label">{{ authState.user?.full_name || 'User' }}</span>
@@ -145,7 +196,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onBeforeUnmount, watch, ref } from 'vue';
+import { computed, onMounted, onBeforeUnmount, watch, ref, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { toastState, showToast } from './toast.js';
 import { authState, setAuth, apiFetch, getModuleData, countInstantChatUnread } from './db.js';
@@ -187,6 +238,118 @@ const chatUnreadBadge = computed(() =>
   chatUnreadCount.value > 99 ? '99+' : String(chatUnreadCount.value)
 );
 let chatUnreadPoll = null;
+
+const notifWrapRef = ref(null);
+const notifPanelRef = ref(null);
+const notifPanelOpen = ref(false);
+const notifUnreadCount = ref(0);
+const notifItems = ref([]);
+const notifLoading = ref(false);
+const notifUnreadBadge = computed(() =>
+  notifUnreadCount.value > 99 ? '99+' : String(notifUnreadCount.value)
+);
+let notifPoll = null;
+
+function formatNotifTime(iso) {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch {
+    return '';
+  }
+}
+
+function onDocClickNotif(e) {
+  if (!notifPanelOpen.value) return;
+  const el = notifWrapRef.value;
+  if (el && !el.contains(e.target)) notifPanelOpen.value = false;
+}
+
+async function pollNotifUnread() {
+  if (!authState.user?.id) {
+    notifUnreadCount.value = 0;
+    return;
+  }
+  try {
+    const res = await apiFetch('/api/notifications?summary=1');
+    const j = await res.json();
+    if (res.ok) notifUnreadCount.value = Number(j.unread_count || 0);
+  } catch {
+    notifUnreadCount.value = 0;
+  }
+}
+
+function startNotifPoll() {
+  stopNotifPoll();
+  if (!authState.user?.id) return;
+  pollNotifUnread();
+  notifPoll = setInterval(pollNotifUnread, 5000);
+}
+
+function stopNotifPoll() {
+  if (notifPoll) {
+    clearInterval(notifPoll);
+    notifPoll = null;
+  }
+}
+
+async function toggleNotifPanel() {
+  notifPanelOpen.value = !notifPanelOpen.value;
+  if (notifPanelOpen.value) await loadNotificationsFull();
+}
+
+async function loadNotificationsFull() {
+  notifLoading.value = true;
+  try {
+    const res = await apiFetch('/api/notifications');
+    const j = await res.json();
+    if (res.ok) {
+      notifUnreadCount.value = Number(j.unread_count || 0);
+      notifItems.value = Array.isArray(j.items) ? j.items : [];
+    }
+  } catch {
+    notifItems.value = [];
+  } finally {
+    notifLoading.value = false;
+  }
+}
+
+async function markAllNotificationsRead() {
+  try {
+    const res = await apiFetch('/api/notifications/read-all', { method: 'POST' });
+    if (res.ok) {
+      notifUnreadCount.value = 0;
+      await loadNotificationsFull();
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+async function openNotificationItem(it) {
+  try {
+    if (!it.read_at) {
+      await apiFetch(`/api/notifications/${it.id}/read`, { method: 'PATCH' });
+    }
+  } catch {
+    /* ignore */
+  }
+  const d = it.data;
+  if (d?.room_code && it.type === 'meeting_invite') {
+    notifPanelOpen.value = false;
+    router.push(`/vconference/room/${d.room_code}`);
+    await nextTick();
+    pollNotifUnread();
+    return;
+  }
+  notifPanelOpen.value = false;
+  pollNotifUnread();
+}
 
 async function pollChatUnread() {
   if (!authState.user?.id || !authState.user?.email) {
@@ -284,24 +447,37 @@ onMounted(() => {
   resetIdleTimer();
 
   window.addEventListener('pwa-instant-chat-read-updated', onChatReadUpdated);
-  if (authState.user?.id) startChatUnreadPoll();
+  window.addEventListener('pwa-notifications-changed', pollNotifUnread);
+  document.addEventListener('click', onDocClickNotif);
+  if (authState.user?.id) {
+    startChatUnreadPoll();
+    startNotifPoll();
+  }
 });
 
 onBeforeUnmount(() => {
   activityEvents.forEach(ev => window.removeEventListener(ev, resetIdleTimer));
   if (idleTimer) clearTimeout(idleTimer);
   stopChatUnreadPoll();
+  stopNotifPoll();
   window.removeEventListener('pwa-instant-chat-read-updated', onChatReadUpdated);
+  window.removeEventListener('pwa-notifications-changed', pollNotifUnread);
+  document.removeEventListener('click', onDocClickNotif);
 });
 
 watch(() => authState.user, (newVal) => {
   if (newVal) {
     resetIdleTimer();
     startChatUnreadPoll();
+    startNotifPoll();
   } else {
     if (idleTimer) clearTimeout(idleTimer);
     stopChatUnreadPoll();
+    stopNotifPoll();
     chatUnreadCount.value = 0;
+    notifUnreadCount.value = 0;
+    notifItems.value = [];
+    notifPanelOpen.value = false;
     resetRtcOnLogout();
   }
 });
@@ -820,6 +996,152 @@ body {
   line-height: 18px;
   text-align: center;
   box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.95);
+}
+
+.nav-notif-wrap {
+  position: relative;
+}
+
+.nav-notif-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.nav-notif-inner {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-notif-badge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #f59e0b;
+  color: #0f172a;
+  font-size: 0.65rem;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.95);
+}
+
+.nav-notif-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(360px, calc(100vw - 2rem));
+  max-height: min(420px, 70vh);
+  background: rgba(15, 23, 42, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.nav-notif-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.nav-notif-title {
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: #f8fafc;
+}
+
+.nav-notif-readall {
+  background: none;
+  border: none;
+  color: #38bdf8;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0.2rem 0;
+}
+
+.nav-notif-readall:hover {
+  text-decoration: underline;
+}
+
+.nav-notif-list {
+  overflow-y: auto;
+  max-height: 340px;
+}
+
+.nav-notif-empty {
+  margin: 0;
+  padding: 1.25rem;
+  color: #64748b;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.nav-notif-item {
+  width: 100%;
+  text-align: left;
+  padding: 0.75rem 0.85rem;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  transition: background 0.15s;
+}
+
+.nav-notif-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.nav-notif-item.is-unread {
+  background: rgba(245, 158, 11, 0.06);
+}
+
+.nav-notif-item-title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #e2e8f0;
+}
+
+.nav-notif-item-body {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.nav-notif-item-time {
+  font-size: 0.68rem;
+  color: #64748b;
+}
+
+.notif-panel-fade-enter-active,
+.notif-panel-fade-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.notif-panel-fade-enter-from,
+.notif-panel-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 
 .user-profile-menu {

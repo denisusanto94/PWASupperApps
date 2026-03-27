@@ -67,6 +67,19 @@ Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)
 
 **API admin Maps ShareIt** (sesi admin): `GET /api/admin/maps-shareit`, `PATCH /api/admin/maps-shareit/:id` (body `{ "verified": true|false }`), `DELETE /api/admin/maps-shareit/:id`.
 
+### 8. Meeting Online (VConference)
+*   **Rute**: `/vconference` (daftar & buat meeting), `/vconference/room/:code` (room video) — **wajib login**.
+*   **Akses dari beranda**: kartu **Meeting Online** di halaman `/`.
+*   **Penyimpanan MySQL**: tabel **`vconference`** (pembuat `user_id`, `room_code` unik, `title`, `scheduled_start` / `scheduled_end`, `link_gdrive` opsional) dan **`vconference_participants`** (`invited_at`, `joined_at` saat peserta masuk room).
+*   **Video**: **Jitsi Meet** (`meet.jit.si`) di iframe; nama pada layar **prejoin** diisi otomatis dari **nama / email user login** (parameter URL `userInfo.displayName` & opsional `userInfo.email`).
+*   **Picture-in-Picture**: tombol **Mode mini (PiP)** memakai **Document Picture-in-Picture** (browser Chromium); opsi **otomatis mini saat pindah tab**; iframe utama di-`about:blank` saat meeting hanya di jendela mini agar tidak dua sesi sekaligus.
+*   **Undangan & notifikasi**: pembuat meeting dapat memilih pengguna dari daftar; setiap undangan baru menulis baris di **`user_notifications`** (tipe `meeting_invite`). Di **header** (sebelah ikon pesan) ada **ikon lonceng** dengan **badge jumlah belum dibaca**; panel daftar notifikasi, **tandai dibaca**, klik item menuju room meeting. Ringkasan polling: `GET /api/notifications?summary=1`.
+*   **API** (autentikasi): `GET /api/vconference`, `POST /api/vconference`, `GET /api/vconference/by-code/:code`, `POST /api/vconference/join`, `PATCH /api/vconference/:id`, `DELETE /api/vconference/:id`, `GET /api/vconference/invite-candidates`; notifikasi: `GET /api/notifications`, `PATCH /api/notifications/:id/read`, `POST /api/notifications/read-all`, `POST /api/notifications/mark-meeting-read` (body `{ "room_code" }`).
+
+### 9. Header global (setelah login)
+*   **Pesan**: ikon ke `/instant-chat` dengan **badge merah** jumlah pesan Instant Chat belum dibaca (polling modul `instant_chat`).
+*   **Notifikasi**: ikon lonceng dengan **badge oranye** jumlah notifikasi **belum dibaca** (`user_notifications`), termasuk undangan Meeting Online.
+
 ---
 
 ## ✨ Arsitektur & Keunggulan Teknis
@@ -76,7 +89,8 @@ Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)
 *   **Security Hardening**: Migrasi kredensial otomatis dari plain-text ke format terenkripsi AES-256 GCM.
 *   **Advanced Session Policy**: Kebijakan single-session untuk user standar, namun tetap fleksibel (multi-login) untuk role Admin demi kemudahan manajemen.
 *   **Unique Registration Control**: Validasi ketat pada proses pendaftaran untuk memastikan integritas data pengguna.
-*   **Global Notification System**: Overlay toast transparan dengan prioritas visual tertinggi (`z-index: 10001`).
+*   **Toast global**: overlay pesan singkat (sukses/error/info) dengan prioritas visual tinggi (`z-index: 10001`).
+*   **Notifikasi in-app**: tabel MySQL `user_notifications` untuk item di panel header (terpisah dari toast); undangan meeting menambah baris per penerima undangan.
 *   **PouchDB Registry**: Menghindari *file locking* pada Windows dengan memastikan sirkulasi instance database yang tunggal.
 
 ---
@@ -100,7 +114,7 @@ MYSQL_DROP_ON_START=false
 ```
 
 ### 2. Migrasi skema MySQL
-Menambahkan atau menyelaraskan tabel (termasuk `maps_shareit`) tanpa menghapus data yang ada:
+Menambahkan atau menyelaraskan tabel (termasuk `maps_shareit`, `vconference`, `vconference_participants`, `user_notifications`, dll.) tanpa menghapus data yang ada:
 ```bash
 npm run migrate
 ```
@@ -121,14 +135,15 @@ npm start
 ---
 
 ## 📂 Struktur Penting
-*   `index.js`: Entry point server & API Bridge (termasuk modul `maps_shareit` & endpoint Maps ShareIt publik).
+*   `index.js`: Entry point server & API Bridge (modul `maps_shareit`, Maps ShareIt publik, **vconference**, **notifikasi**).
 *   `src/server/baileys.js`: Logika Multi-Session WhatsApp.
 *   `src/server/worker.js`: Background worker pengirim pesan bulk.
-*   `src/server/init_mysql.js`: Skema otomatis & tabel migrasi (`is_guest` standardized, tabel `maps_shareit`).
+*   `src/server/init_mysql.js`: Skema otomatis & tabel migrasi (`is_guest` standardized, `maps_shareit`, `vconference` + partisipan, `user_notifications`).
 *   `scripts/migrate-database.js`: Jalankan via `npm run migrate`.
-*   `src/client/App.vue`: Shell global, header (ikon pesan + badge unread Instant Chat, polling modul `instant_chat`).
+*   `src/client/App.vue`: Shell global, header (ikon pesan + badge Instant Chat; ikon notifikasi + badge; polling).
 *   `src/client/views/MapsShareItView.vue`: UI Maps ShareIt (peta, form bagikan, popup navigasi & verifikasi).
 *   `src/client/views/AdminView.vue`: Panel admin (Users, Maps Shareit Management, toggle verifikasi, modal konfirmasi).
+*   `src/client/views/VconferenceView.vue`: Meeting Online — form buat meeting, room Jitsi, PiP, undangan.
 *   `src/client/views/InstantMessagingView.vue`: UI Instant Chat, WebRTC, ringtone & suara end/decline.
 *   `src/client/db.js`: Abstraksi data client-side & API Fetcher; helper Instant Chat unread (`migrateInstantChatReadMapOnce`, `countInstantChatUnread`, `setChatReadCursor`).
 *   `public/sound/`: Aset audio panggilan Instant Chat (`voice-call-ringing.mp3`, `video-call-ringing.mp3`, `end-decline-call.mp3`).

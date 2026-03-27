@@ -231,6 +231,396 @@ app.get('/api/users', authenticate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+function generateVconferenceRoomCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = '';
+  for (let i = 0; i < 10; i++) {
+    s += chars[crypto.randomInt(0, chars.length)];
+  }
+  return s;
+}
+
+/** datetime-local / ISO string → MySQL DATETIME (komponen lokal browser) */
+function dateInputToMysqlLocal(dt) {
+  const d = new Date(dt);
+  if (Number.isNaN(d.getTime())) return null;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
+}
+
+async function insertMeetingInviteNotification(pool, { recipientUserId, vconferenceId, roomCode, title, creatorLabel }) {
+  const t = title ? String(title).trim().slice(0, 120) : 'Meeting';
+  const body = `Anda diundang ke "${t}" oleh ${creatorLabel}. Kode room: ${roomCode}`;
+  const dataJson = JSON.stringify({
+    vconference_id: vconferenceId,
+    room_code: String(roomCode).toUpperCase(),
+    type: 'meeting_invite'
+  });
+  await pool.query(
+    `INSERT INTO user_notifications (user_id, type, title, body, data_json) VALUES (?, 'meeting_invite', ?, ?, ?)`,
+    [recipientUserId, 'Undangan Meeting Online', body, dataJson]
+  );
+}
+
+app.get('/api/notifications', authenticate, async (req, res) => {
+  if (!mysqlPool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    if (String(req.query.summary || '') === '1') {
+      const [countRows] = await mysqlPool.query(
+        `SELECT COUNT(*) AS c FROM user_notifications WHERE user_id = ? AND read_at IS NULL`,
+        [req.user.id]
+      );
+      return res.json({ unread_count: Number(countRows[0]?.c ?? 0) });
+    }
+    const [countRows] = await mysqlPool.query(
+      `SELECT COUNT(*) AS c FROM user_notifications WHERE user_id = ? AND read_at IS NULL`,
+      [req.user.id]
+    );
+    const unread = Number(countRows[0]?.c ?? 0);
+    const [items] = await mysqlPool.query(
+      `SELECT id, type, title, body, data_json, read_at, created_at
+       FROM user_notifications WHERE user_id = ?
+       ORDER BY created_at DESC
+       LIMIT 80`,
+      [req.user.id]
+    );
+    const normalized = items.map((row) => {
+      let data = row.data_json;
+      if (Buffer.isBuffer && Buffer.isBuffer(data)) {
+        try {
+          data = JSON.parse(data.toString('utf8'));
+        } catch {
+          data = null;
+        }
+      } else if (data != null && typeof data === 'string') {
+        try {
+          data = JSON.parse(data);
+        } catch {
+          data = null;
+        }
+      }
+      return {
+        id: row.id,
+        type: row.type,
+        title: row.title,
+        body: row.body,
+        data,
+        read_at: row.read_at,
+        created_at: row.created_at
+      };
+    });
+    res.json({ unread_count: unread, items: normalized });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/notifications/read-all', authenticate, async (req, res) => {
+  if (!mysqlPool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    await mysqlPool.query(`UPDATE user_notifications SET read_at = NOW() WHERE user_id = ? AND read_at IS NULL`, [
+      req.user.id
+    ]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/notifications/mark-meeting-read', authenticate, async (req, res) => {
+  if (!mysqlPool) return res.status(503).json({ error: 'Database unavailable' });
+  const code = String(req.body?.room_code || '').trim().toUpperCase();
+  if (!code) return res.status(400).json({ error: 'room_code wajib.' });
+  try {
+    await mysqlPool.query(
+      `UPDATE user_notifications SET read_at = NOW()
+       WHERE user_id = ? AND type = 'meeting_invite' AND read_at IS NULL
+         AND JSON_UNQUOTE(JSON_EXTRACT(data_json, '$.room_code')) = ?`,
+      [req.user.id, code]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/api/notifications/:id/read', authenticate, async (req, res) => {
+  if (!mysqlPool) return res.status(503).json({ error: 'Database unavailable' });
+  const id = parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID tidak valid.' });
+  try {
+    const [r] = await mysqlPool.query(
+      `UPDATE user_notifications SET read_at = NOW() WHERE id = ? AND user_id = ? AND read_at IS NULL`,
+      [id, req.user.id]
+    );
+    if (r.affectedRows === 0) return res.status(404).json({ error: 'Tidak ditemukan.' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/** Daftar user untuk undangan meeting (semua kecuali diri sendiri) */
+app.get('/api/vconference/invite-candidates', authenticate, async (req, res) => {
+  if (!mysqlPool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const [rows] = await mysqlPool.query(
+      `SELECT id, email, full_name FROM users WHERE id != ? ORDER BY full_name ASC, email ASC`,
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/vconference', authenticate, async (req, res) => {
+  if (!mysqlPool) return res.status(503).json({ error: 'Database unavailable' });
+  try {
+    const [rows] = await mysqlPool.query(
+      `SELECT DISTINCT v.id, v.user_id, v.room_code, v.title, v.scheduled_start, v.scheduled_end,
+              v.link_gdrive, v.created_at, v.updated_at,
+              uc.full_name AS creator_name, uc.email AS creator_email,
+              CASE WHEN v.user_id = ? THEN 1 ELSE 0 END AS is_creator,
+              (SELECT COUNT(*) FROM vconference_participants pc WHERE pc.vconference_id = v.id) AS participant_count
+       FROM vconference v
+       JOIN users uc ON uc.id = v.user_id
+       LEFT JOIN vconference_participants p ON p.vconference_id = v.id AND p.user_id = ?
+       WHERE v.user_id = ? OR p.user_id IS NOT NULL
+       ORDER BY v.scheduled_start DESC`,
+      [req.user.id, req.user.id, req.user.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/vconference/by-code/:code', authenticate, async (req, res) => {
+  if (!mysqlPool) return res.status(503).json({ error: 'Database unavailable' });
+  const code = String(req.params.code || '').trim().toUpperCase();
+  if (code.length < 4) return res.status(400).json({ error: 'Kode room tidak valid.' });
+  try {
+    const [confRows] = await mysqlPool.query(
+      `SELECT v.*, uc.full_name AS creator_name, uc.email AS creator_email
+       FROM vconference v
+       JOIN users uc ON uc.id = v.user_id
+       WHERE v.room_code = ?`,
+      [code]
+    );
+    if (confRows.length === 0) return res.status(404).json({ error: 'Meeting tidak ditemukan.' });
+    const v = confRows[0];
+    const [partRows] = await mysqlPool.query(
+      `SELECT p.user_id, p.invited_at, p.joined_at, u.full_name, u.email
+       FROM vconference_participants p
+       JOIN users u ON u.id = p.user_id
+       WHERE p.vconference_id = ?
+       ORDER BY p.invited_at ASC`,
+      [v.id]
+    );
+    const access =
+      v.user_id === req.user.id ||
+      partRows.some((p) => p.user_id === req.user.id);
+    if (!access) {
+      return res.status(403).json({ error: 'Anda tidak diundang ke meeting ini. Minta link atau undangan dari pembuat.' });
+    }
+    res.json({
+      ...v,
+      participants: partRows,
+      jitsi_room_name: `PWASupperApps-${v.room_code}`,
+      share_path: `/vconference/room/${v.room_code}`
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/vconference', authenticate, async (req, res) => {
+  if (!mysqlPool) return res.status(503).json({ error: 'Database unavailable' });
+  const { title, scheduled_start, scheduled_end, link_gdrive, invite_user_ids } = req.body || {};
+  const startStr = dateInputToMysqlLocal(scheduled_start);
+  const endStr = dateInputToMysqlLocal(scheduled_end);
+  if (!startStr || !endStr) {
+    return res.status(400).json({ error: 'Jadwal mulai dan selesai wajib diisi (format valid).' });
+  }
+  if (new Date(scheduled_end) <= new Date(scheduled_start)) {
+    return res.status(400).json({ error: 'Waktu selesai harus setelah waktu mulai.' });
+  }
+  const invites = Array.isArray(invite_user_ids)
+    ? [...new Set(invite_user_ids.map((x) => parseInt(String(x), 10)).filter((n) => Number.isFinite(n) && n !== req.user.id))]
+    : [];
+  let roomCode = '';
+  try {
+    for (let attempt = 0; attempt < 8; attempt++) {
+      roomCode = generateVconferenceRoomCode();
+      try {
+        const [ins] = await mysqlPool.query(
+          `INSERT INTO vconference (user_id, room_code, title, scheduled_start, scheduled_end, link_gdrive)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [
+            req.user.id,
+            roomCode,
+            title ? String(title).trim().slice(0, 255) || null : null,
+            startStr,
+            endStr,
+            link_gdrive ? String(link_gdrive).trim().slice(0, 2000) || null : null
+          ]
+        );
+        const vid = ins.insertId;
+        const creatorLabel = req.user.full_name || req.user.email || 'Pengguna';
+        const meetTitle = title ? String(title).trim().slice(0, 255) || null : null;
+        for (const uid of invites) {
+          const [r] = await mysqlPool.query(
+            `INSERT IGNORE INTO vconference_participants (vconference_id, user_id, invited_at, joined_at)
+             VALUES (?, ?, NOW(), NULL)`,
+            [vid, uid]
+          );
+          if (r.affectedRows === 1) {
+            try {
+              await insertMeetingInviteNotification(mysqlPool, {
+                recipientUserId: uid,
+                vconferenceId: vid,
+                roomCode,
+                title: meetTitle,
+                creatorLabel
+              });
+            } catch (ne) {
+              console.warn('Meeting invite notification:', ne.message);
+            }
+          }
+        }
+        return res.json({
+          ok: true,
+          id: vid,
+          room_code: roomCode,
+          jitsi_room_name: `PWASupperApps-${roomCode}`,
+          share_path: `/vconference/room/${roomCode}`
+        });
+      } catch (e) {
+        if (e.code === 'ER_DUP_ENTRY') continue;
+        throw e;
+      }
+    }
+    return res.status(500).json({ error: 'Gagal membuat kode room unik.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/vconference/join', authenticate, async (req, res) => {
+  if (!mysqlPool) return res.status(503).json({ error: 'Database unavailable' });
+  const code = String(req.body?.room_code || '').trim().toUpperCase();
+  if (!code) return res.status(400).json({ error: 'room_code wajib.' });
+  try {
+    const [confRows] = await mysqlPool.query(`SELECT id, user_id FROM vconference WHERE room_code = ?`, [code]);
+    if (confRows.length === 0) return res.status(404).json({ error: 'Meeting tidak ditemukan.' });
+    const { id: vid, user_id: creatorId } = confRows[0];
+    await mysqlPool.query(
+      `INSERT INTO vconference_participants (vconference_id, user_id, invited_at, joined_at)
+       VALUES (?, ?, NOW(), NOW())
+       ON DUPLICATE KEY UPDATE joined_at = NOW()`,
+      [vid, req.user.id]
+    );
+    res.json({ ok: true, vconference_id: vid, is_creator: creatorId === req.user.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch('/api/vconference/:id', authenticate, async (req, res) => {
+  if (!mysqlPool) return res.status(503).json({ error: 'Database unavailable' });
+  const id = parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID tidak valid.' });
+  const { title, scheduled_start, scheduled_end, link_gdrive, invite_user_ids } = req.body || {};
+  try {
+    const [own] = await mysqlPool.query(`SELECT * FROM vconference WHERE id = ? AND user_id = ?`, [id, req.user.id]);
+    if (own.length === 0) return res.status(403).json({ error: 'Hanya pembuat meeting yang dapat mengubah.' });
+    const cur = own[0];
+    let start =
+      cur.scheduled_start instanceof Date
+        ? dateInputToMysqlLocal(cur.scheduled_start)
+        : String(cur.scheduled_start).replace('T', ' ').slice(0, 19);
+    let end =
+      cur.scheduled_end instanceof Date
+        ? dateInputToMysqlLocal(cur.scheduled_end)
+        : String(cur.scheduled_end).replace('T', ' ').slice(0, 19);
+    if (scheduled_start != null && scheduled_start !== '') {
+      const s = dateInputToMysqlLocal(scheduled_start);
+      if (!s) return res.status(400).json({ error: 'scheduled_start tidak valid.' });
+      start = s;
+    }
+    if (scheduled_end != null && scheduled_end !== '') {
+      const e = dateInputToMysqlLocal(scheduled_end);
+      if (!e) return res.status(400).json({ error: 'scheduled_end tidak valid.' });
+      end = e;
+    }
+    if (new Date(String(end).replace(' ', 'T')) <= new Date(String(start).replace(' ', 'T'))) {
+      return res.status(400).json({ error: 'Waktu selesai harus setelah waktu mulai.' });
+    }
+    const setParts = [
+      'title = COALESCE(?, title)',
+      'scheduled_start = ?',
+      'scheduled_end = ?'
+    ];
+    const setVals = [
+      title !== undefined ? (String(title).trim().slice(0, 255) || null) : null,
+      start,
+      end
+    ];
+    if (link_gdrive !== undefined) {
+      setParts.push('link_gdrive = ?');
+      setVals.push(String(link_gdrive).trim().slice(0, 2000) || null);
+    }
+    setVals.push(id);
+    await mysqlPool.query(
+      `UPDATE vconference SET ${setParts.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+      setVals
+    );
+    if (Array.isArray(invite_user_ids)) {
+      const invites = [...new Set(invite_user_ids.map((x) => parseInt(String(x), 10)).filter((n) => Number.isFinite(n) && n !== req.user.id))];
+      const creatorLabel = req.user.full_name || req.user.email || 'Pengguna';
+      const meetTitle = cur.title;
+      const rc = cur.room_code;
+      for (const uid of invites) {
+        const [r] = await mysqlPool.query(
+          `INSERT IGNORE INTO vconference_participants (vconference_id, user_id, invited_at, joined_at)
+           VALUES (?, ?, NOW(), NULL)`,
+          [id, uid]
+        );
+        if (r.affectedRows === 1) {
+          try {
+            await insertMeetingInviteNotification(mysqlPool, {
+              recipientUserId: uid,
+              vconferenceId: id,
+              roomCode: rc,
+              title: meetTitle,
+              creatorLabel
+            });
+          } catch (ne) {
+            console.warn('Meeting invite notification:', ne.message);
+          }
+        }
+      }
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/vconference/:id', authenticate, async (req, res) => {
+  if (!mysqlPool) return res.status(503).json({ error: 'Database unavailable' });
+  const id = parseInt(String(req.params.id), 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: 'ID tidak valid.' });
+  try {
+    const [r] = await mysqlPool.query(`DELETE FROM vconference WHERE id = ? AND user_id = ?`, [id, req.user.id]);
+    if (r.affectedRows === 0) return res.status(404).json({ error: 'Tidak ditemukan atau bukan pemilik.' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // --- ADMIN ROUTES ---
 app.get('/api/admin/users', authenticate, isAdmin, async (req, res) => {
   try {
