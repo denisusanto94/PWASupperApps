@@ -31,8 +31,14 @@
       <!-- Kiri: Konten (70% Desktop) -->
       <section class="editor-section">
         <div v-if="currentUser" class="editor-top-actions">
-          <button @click="saveData" class="btn btn-primary btn-save-main" :disabled="saving">
-            {{ saving ? 'Menyimpan...' : 'Simpan Perubahan' }}
+          <button @click="saveData" class="btn-save-premium" :disabled="saving">
+            <svg v-if="!saving" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v13a2 2 0 0 1-2 2z"></path>
+              <polyline points="17 21 17 13 7 13 7 21"></polyline>
+              <polyline points="7 3 7 8 15 8"></polyline>
+            </svg>
+            <span v-else class="btn-spinner"></span>
+            <span>{{ saving ? 'Menyimpan...' : 'Simpan Perubahan' }}</span>
           </button>
         </div>
         <div class="editor-card">
@@ -413,6 +419,73 @@ onMounted(() => {
 /* Editor Section */
 .editor-section {
   min-width: 0;
+}
+
+.editor-top-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 1.5rem;
+}
+
+.btn-save-premium {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  background: linear-gradient(135deg, #00a884, #059669);
+  color: #fff;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 168, 132, 0.35);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-save-premium:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 168, 132, 0.45);
+  filter: brightness(1.1);
+}
+
+.btn-save-premium:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-save-premium:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+}
+
+.btn-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spinner 0.8s linear infinite;
+}
+
+@keyframes spinner {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+  .editor-top-actions {
+    position: fixed;
+    bottom: 2rem;
+    right: 1.5rem;
+    z-index: 2000;
+    margin-bottom: 0;
+  }
+  .btn-save-premium {
+    padding: 0.85rem 1.75rem;
+    font-size: 1rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 168, 132, 0.5);
+  }
 }
 
 .editor-card {

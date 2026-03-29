@@ -17,7 +17,7 @@
           </div>
         </div>
 
-        <div class="header-center-col">
+        <div class="header-center-col" :class="{ 'hide-mobile-specific': shouldHideCenterMobile }">
           <Transition name="rtc-strip-fade">
             <div
               v-if="authState.user && rtcState.incomingCall"
@@ -394,6 +394,15 @@ const appHeaderVisible = computed(() => {
   return true;
 });
 
+const hideCenterMobilePages = [
+  '/instant-chat',
+  '/getlynkid',
+  '/wedding-invitation',
+  '/timestamp-camera',
+  '/wab-blaster'
+];
+const shouldHideCenterMobile = computed(() => hideCenterMobilePages.includes(route.path));
+
 // Cache Busting / Version Check
 const checkVersion = async () => {
   try {
@@ -565,6 +574,28 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.35rem;
+}
+
+@media (max-width: 1023px) {
+  .app-header-container {
+    padding: 0 1rem;
+    gap: 0.75rem;
+    justify-content: space-between;
+  }
+  .header-center-col.hide-mobile-specific {
+    display: none !important;
+  }
+  .user-nav {
+    margin-left: auto;
+    gap: 0.85rem;
+  }
+  .user-name-label {
+    display: none;
+  }
+  .user-profile-menu {
+    padding: 0.25rem;
+    gap: 0.35rem;
+  }
 }
 
 .rtc-strip-fade-enter-active,
@@ -1124,6 +1155,7 @@ body {
   color: #94a3b8;
   line-height: 1.4;
   display: -webkit-box;
+  line-clamp: 3;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
