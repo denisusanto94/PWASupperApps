@@ -64,12 +64,12 @@ const authenticate = async (req, res, next) => {
 
   try {
     const [rows] = await mysqlPool.query(`
-      SELECT s.id as sessionId, u.id, u.email, u.full_name, r.name as role
+      SELECT s.id as sessionId, u.id, u.email, u.full_name, r.name as role, s.expires_at, s.last_activity
       FROM sessions_id s
       JOIN users u ON s.user_id = u.id
       LEFT JOIN users_has_roles uhr ON u.id = uhr.user_id
       LEFT JOIN roles r ON uhr.role_id = r.id
-      WHERE s.id = ? AND s.expires_at > CURRENT_TIMESTAMP
+      WHERE s.id = ?
     `, [sessionId]);
 
     if (rows.length === 0) {
@@ -77,10 +77,44 @@ const authenticate = async (req, res, next) => {
           req.user = { isGuest: true, id: null, role: 'guest' };
           return next();
       }
-      return res.status(401).json({ error: 'Session expired or invalid' });
+      console.log(`🔍 [Auth] Session not found: ${sessionId.slice(0, 8)}...`);
+      return res.status(401).json({ error: 'Sesi tidak ditemukan. Silakan login kembali.' });
     }
 
-    req.user = rows[0];
+    const session = rows[0];
+    
+    // Debug logging
+    const [timeDebug] = await mysqlPool.query(`SELECT NOW() as dbnow, s.expires_at, s.last_activity FROM sessions_id s WHERE s.id = ?`, [sessionId]);
+    if (timeDebug.length > 0) {
+      console.log(`🔍 [Auth Debug] DB Now: ${timeDebug[0].dbnow}, Exp: ${timeDebug[0].expires_at}, Last: ${timeDebug[0].last_activity}`);
+    }
+
+    // 1. Check absolute expiration
+    const [expiredCheck] = await mysqlPool.query(
+      `SELECT id FROM sessions_id WHERE id = ? AND expires_at > NOW()`, 
+      [sessionId]
+    );
+    if (expiredCheck.length === 0) {
+      console.log(`🔍 [Auth] Session expired: ${sessionId.slice(0, 8)}...`);
+      await mysqlPool.query(`DELETE FROM sessions_id WHERE id = ?`, [sessionId]);
+      return res.status(401).json({ error: 'Sesi kedaluwarsa. Silakan login kembali.' });
+    }
+
+    // 2. Check idle timeout (30 minutes)
+    const [idleCheck] = await mysqlPool.query(
+      `SELECT id FROM sessions_id WHERE id = ? AND TIMESTAMPDIFF(MINUTE, last_activity, NOW()) < 30`, 
+      [sessionId]
+    );
+    if (idleCheck.length === 0) {
+      console.log(`🔍 [Auth] Session idle > 30m: ${sessionId.slice(0, 8)}...`);
+      await mysqlPool.query(`DELETE FROM sessions_id WHERE id = ?`, [sessionId]);
+      return res.status(401).json({ error: 'Sesi berakhir karena idle selama 30 menit.' });
+    }
+
+    // Update last_activity to now
+    await mysqlPool.query(`UPDATE sessions_id SET last_activity = CURRENT_TIMESTAMP WHERE id = ?`, [sessionId]);
+
+    req.user = session;
     next();
   } catch (err) {
     console.error('Auth Middleware Error:', err);
@@ -150,21 +184,17 @@ app.post('/api/auth/login', async (req, res) => {
     `, [user.id]);
     const userRole = roles.length > 0 ? roles[0].name : 'user';
 
-    // Check if user already has an active session (skip for admin/superadmin)
-    if (userRole !== 'admin' && userRole !== 'superadmin') {
-      const [activeSessions] = await mysqlPool.query(
-        `SELECT id FROM sessions_id WHERE user_id = ? AND expires_at > CURRENT_TIMESTAMP`,
-        [user.id]
-      );
-      if (activeSessions.length > 0) {
-        return res.status(403).json({ error: 'User sudah login. Tutup sesi di perangkat/browser lain terlebih dahulu.' });
-      }
-    }
+    // --- MULTI-DEVICE SUPPORT ENABLED FOR ALL USERS ---
+    // (Previously regular users were restricted to one active session)
     
     const sessionId = crypto.randomUUID();
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
     
-    await mysqlPool.query(`INSERT INTO sessions_id (id, user_id, expires_at) VALUES (?, ?, ?)`, [sessionId, user.id, expiresAt]);
+    await mysqlPool.query(
+      `INSERT INTO sessions_id (id, user_id, expires_at, last_activity) 
+       VALUES (?, ?, DATE_ADD(NOW(), INTERVAL 24 HOUR), CURRENT_TIMESTAMP)`, 
+      [sessionId, user.id]
+    );
+    console.log(`🚀 [Session] Created session: ${sessionId.slice(0, 8)}... for user: ${user.email}`);
     
     res.json({ 
       sessionId, 
@@ -1170,6 +1200,18 @@ async function main() {
 
   // 3. Start Global Background Worker
   await startWorker(mysqlPool);
+
+  // 3.5. Periodic cleanup of idle sessions (30 minutes)
+  setInterval(async () => {
+    try {
+      const [res] = await mysqlPool.query(`DELETE FROM sessions_id WHERE last_activity < DATE_SUB(NOW(), INTERVAL 30 MINUTE)`);
+      if (res.affectedRows > 0) {
+        console.log(`🧹 Periodic cleanup: Removed ${res.affectedRows} idle sessions.`);
+      }
+    } catch (err) {
+      console.error('Cleanup Error:', err);
+    }
+  }, 5 * 60 * 1000);
 
   // 4. Start Server
   app.listen(PORT, () => {

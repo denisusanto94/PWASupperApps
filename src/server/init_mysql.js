@@ -165,11 +165,17 @@ export async function initMysql(config) {
       CREATE TABLE IF NOT EXISTS sessions_id (
         id VARCHAR(255) PRIMARY KEY,
         user_id INT,
-        expires_at TIMESTAMP,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at DATETIME,
+        last_activity DATETIME DEFAULT CURRENT_TIMESTAMP,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       )
     `);
+
+    // Migration to DATETIME
+    try { await connection.query(`ALTER TABLE sessions_id MODIFY COLUMN expires_at DATETIME`); } catch(e){}
+    try { await connection.query(`ALTER TABLE sessions_id MODIFY COLUMN last_activity DATETIME DEFAULT CURRENT_TIMESTAMP`); } catch(e){}
+    try { await connection.query(`ALTER TABLE sessions_id MODIFY COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP`); } catch(e){}
 
     // 12. token_id
     await connection.query(`

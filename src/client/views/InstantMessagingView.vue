@@ -265,7 +265,8 @@ import {
   getModuleData, 
   saveModuleData,
   migrateInstantChatReadMapOnce,
-  setChatReadCursor
+  setChatReadCursor,
+  setAuth
 } from '../db.js';
 import { showToast } from '../toast.js';
 import { rtcState, initiateOutgoingCall } from '../instantChatRtc.js';
@@ -410,14 +411,12 @@ const startPolling = () => {
     // Core chat polling
     pollingInterval = setInterval(refreshUI, 4000);
     
-    // Online status (ping + check others)
+    // Online status check others
     onlineInterval = setInterval(() => {
-        pingOnline();
         loadOnlineStatus();
     }, 15000);
 
     // Initial immediate actions
-    pingOnline();
     loadOnlineStatus();
 };
 
@@ -561,7 +560,11 @@ const startNewChat = () => {
 
 const scrollToBottom = (behavior = 'smooth') => { nextTick(() => { if (messageBox.value) messageBox.value.scrollTo({ top: messageBox.value.scrollHeight, behavior }); }); };
 const openImage = (url) => { previewImage.value = url; };
-const logout = () => { showLogoutConfirm.value = false; window.location.href = '/login'; };
+const logout = () => { 
+  showLogoutConfirm.value = false; 
+  setAuth(null, null);
+  window.location.href = '/login'; 
+};
 
 onMounted(async () => {
     if (isLoggedIn.value) { await loadAllRoster(); await refreshUI(); startPolling(); }

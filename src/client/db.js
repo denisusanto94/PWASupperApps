@@ -12,8 +12,12 @@ export const setAuth = (user, sessionId, isGuest = false) => {
   authState.sessionId = sessionId;
   authState.isGuest = isGuest;
   
-  if (user) localStorage.setItem('pwa_user', JSON.stringify(user));
-  else localStorage.removeItem('pwa_user');
+  if (user) {
+    localStorage.setItem('pwa_user', JSON.stringify(user));
+    localStorage.setItem('pwa_last_activity', Date.now().toString());
+  } else {
+    localStorage.clear(); // Clear all localStorage as requested
+  }
   
   if (sessionId) localStorage.setItem('pwa_session_id', sessionId);
   else localStorage.removeItem('pwa_session_id');

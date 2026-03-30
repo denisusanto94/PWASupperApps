@@ -20,7 +20,7 @@
         <div class="header-center-col" :class="{ 'hide-mobile-specific': shouldHideCenterMobile }">
           <Transition name="rtc-strip-fade">
             <div
-              v-if="authState.user && rtcState.incomingCall"
+              v-if="authState.user && rtcState.incomingCall && !rtcIncomingCallModalMode"
               class="rtc-incoming-strip"
               :class="{ 'is-minimized': incomingCallBarMinimized }"
             >
@@ -192,6 +192,41 @@
         </div>
       </div>
     </Transition>
+    
+    <!-- Incoming Call Modal (Center) -->
+    <Transition name="fade">
+      <div v-if="authState.user && rtcState.incomingCall && rtcIncomingCallModalMode" class="rtc-modal-overlay">
+        <div class="rtc-modal-card">
+          <div class="rtc-modal-pulse"></div>
+          <div class="rtc-modal-avatar" :style="{ background: rtcAvatarColor(rtcState.incomingCall.from) }">
+            {{ (rtcState.incomingCall.from || '?')[0].toUpperCase() }}
+          </div>
+          <h2 class="rtc-modal-name">{{ rtcState.incomingCall.from }}</h2>
+          <p class="rtc-modal-status">Panggilan {{ rtcState.incomingCall.callType === 'video' ? 'Video' : 'Suara' }} Masuk...</p>
+          
+          <div class="rtc-modal-actions">
+            <button class="rtc-modal-btn rtc-modal-btn-reject" @click="declineIncomingCall">
+              <div class="rtc-modal-icon-cir">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </div>
+              <span>Tolak</span>
+            </button>
+            <button class="rtc-modal-btn rtc-modal-btn-hide" @click="rtcIncomingCallModalMode = false">
+              <div class="rtc-modal-icon-cir">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>
+              </div>
+              <span>Sembunyikan</span>
+            </button>
+            <button class="rtc-modal-btn rtc-modal-btn-accept" @click="acceptIncomingCall">
+              <div class="rtc-modal-icon-cir">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.82 12.82 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              </div>
+              <span>Terima</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -216,6 +251,11 @@ const router = useRouter();
 
 const rtcLocalVideoRef = ref(null);
 const rtcRemoteVideoRef = ref(null);
+const rtcIncomingCallModalMode = ref(true);
+
+watch(() => rtcState.incomingCall, (val) => {
+  if (val) rtcIncomingCallModalMode.value = true;
+});
 
 function rtcAvatarColor(name) {
   if (!name) return '#2a3942';
@@ -298,6 +338,28 @@ function stopNotifPoll() {
   }
 }
 
+let pingPoll = null;
+async function pollChatPing() {
+  if (!authState.user?.id) return;
+  try {
+    await apiFetch('/api/chat/ping', { method: 'POST' });
+  } catch (e) {}
+}
+
+function startPingPoll() {
+  stopPingPoll();
+  if (!authState.user?.id) return;
+  pollChatPing();
+  pingPoll = setInterval(pollChatPing, 15000);
+}
+
+function stopPingPoll() {
+  if (pingPoll) {
+    clearInterval(pingPoll);
+    pingPoll = null;
+  }
+}
+
 async function toggleNotifPanel() {
   notifPanelOpen.value = !notifPanelOpen.value;
   if (notifPanelOpen.value) await loadNotificationsFull();
@@ -362,7 +424,14 @@ async function pollChatUnread() {
       chatUnreadCount.value = 0;
       return;
     }
-    chatUnreadCount.value = countInstantChatUnread(rows, authState.user.email, authState.user.id);
+    const newCount = countInstantChatUnread(rows, authState.user.email, authState.user.id);
+    
+    // Notify if new message
+    if (newCount > chatUnreadCount.value && route.path !== '/instant-chat') {
+       showToast('Pesan baru masuk di Instant Chat', 'info');
+    }
+
+    chatUnreadCount.value = newCount;
     await processRtcSignalsFromResults(rows);
   } catch {
     chatUnreadCount.value = 0;
@@ -422,7 +491,8 @@ const checkVersion = async () => {
   }
 };
 
-const handleLogout = async () => {
+const handleLogout = async (reason = 'manual') => {
+  console.log('🔄 Logout initiated. Reason:', reason);
   resetRtcOnLogout();
   if (authState.user) {
     try {
@@ -441,10 +511,33 @@ const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchsta
 const resetIdleTimer = () => {
   if (idleTimer) clearTimeout(idleTimer);
   if (authState.user) {
+    // Persist to localStorage to track across web closing
+    localStorage.setItem('pwa_last_activity', Date.now().toString());
+    
     idleTimer = setTimeout(() => {
       showToast('Sesi ditutup karena idle selama 30 menit', 'info');
-      handleLogout();
+      handleLogout('idle_timeout_client');
     }, IDLE_TIMEOUT);
+  }
+};
+
+const checkIdleOnReturn = () => {
+  if (!authState.user) return;
+  const last = localStorage.getItem('pwa_last_activity');
+  if (last) {
+    const diff = Date.now() - parseInt(last, 10);
+    if (diff > IDLE_TIMEOUT) {
+      handleLogout('idle_return_check');
+    }
+  } else {
+    // If no record, initialize it now (prevents immediate logout on first visit after update)
+    localStorage.setItem('pwa_last_activity', Date.now().toString());
+  }
+};
+
+const onVisibilityChange = () => {
+  if (document.visibilityState === 'visible') {
+    checkIdleOnReturn();
   }
 };
 
@@ -452,8 +545,13 @@ onMounted(() => {
   checkVersion();
   setInterval(checkVersion, 5 * 60 * 1000);
 
+  // Check on mount if we've been gone for long
+  checkIdleOnReturn();
+
   activityEvents.forEach(ev => window.addEventListener(ev, resetIdleTimer));
   resetIdleTimer();
+
+  window.addEventListener('visibilitychange', onVisibilityChange);
 
   window.addEventListener('pwa-instant-chat-read-updated', onChatReadUpdated);
   window.addEventListener('pwa-notifications-changed', pollNotifUnread);
@@ -461,6 +559,7 @@ onMounted(() => {
   if (authState.user?.id) {
     startChatUnreadPoll();
     startNotifPoll();
+    startPingPoll();
   }
 });
 
@@ -469,6 +568,8 @@ onBeforeUnmount(() => {
   if (idleTimer) clearTimeout(idleTimer);
   stopChatUnreadPoll();
   stopNotifPoll();
+  stopPingPoll();
+  window.removeEventListener('visibilitychange', onVisibilityChange);
   window.removeEventListener('pwa-instant-chat-read-updated', onChatReadUpdated);
   window.removeEventListener('pwa-notifications-changed', pollNotifUnread);
   document.removeEventListener('click', onDocClickNotif);
@@ -479,10 +580,12 @@ watch(() => authState.user, (newVal) => {
     resetIdleTimer();
     startChatUnreadPoll();
     startNotifPoll();
+    startPingPoll();
   } else {
     if (idleTimer) clearTimeout(idleTimer);
     stopChatUnreadPoll();
     stopNotifPoll();
+    stopPingPoll();
     chatUnreadCount.value = 0;
     notifUnreadCount.value = 0;
     notifItems.value = [];
@@ -1281,5 +1384,125 @@ body {
 .app-main {
   flex: 1;
 }
+.rtc-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.92);
+  backdrop-filter: blur(20px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.rtc-modal-card {
+  width: 100%;
+  max-width: 360px;
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 40px;
+  padding: 3rem 2rem;
+  text-align: center;
+  position: relative;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.rtc-modal-pulse {
+  position: absolute;
+  top: 3rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: rgba(59, 130, 246, 0.2);
+  animation: rtc-modal-ping 2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes rtc-modal-ping {
+  75%, 100% { transform: translateX(-50%) scale(2); opacity: 0; }
+}
+
+.rtc-modal-avatar {
+  width: 100px;
+  height: 100px;
+  border-radius: 35px;
+  margin: 0 auto 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: white;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.rtc-modal-name {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: white;
+  margin-bottom: 0.5rem;
+}
+
+.rtc-modal-status {
+  color: #94a3b8;
+  font-size: 1rem;
+  font-weight: 500;
+  margin-bottom: 3rem;
+}
+
+.rtc-modal-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.rtc-modal-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.rtc-modal-btn:hover {
+  transform: scale(1.05);
+}
+
+.rtc-modal-btn span {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #cbd5e1;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.rtc-modal-icon-cir {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+}
+
+.rtc-modal-btn-reject .rtc-modal-icon-cir { background: #f43f5e; }
+.rtc-modal-btn-accept .rtc-modal-icon-cir { background: #10b981; animation: rtc-vibrate 1s infinite; }
+.rtc-modal-btn-hide .rtc-modal-icon-cir { background: #334155; width: 44px; height: 44px; }
+
+@keyframes rtc-vibrate {
+  0%, 100% { transform: rotate(0); }
+  25% { transform: rotate(-10deg); }
+  75% { transform: rotate(10deg); }
+}
+
 </style>
 

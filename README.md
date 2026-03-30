@@ -79,6 +79,46 @@ Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)
 ### 9. Header global (setelah login)
 *   **Pesan**: ikon ke `/instant-chat` dengan **badge merah** jumlah pesan Instant Chat belum dibaca (polling modul `instant_chat`).
 *   **Notifikasi**: ikon lonceng dengan **badge oranye** jumlah notifikasi **belum dibaca** (`user_notifications`), termasuk undangan Meeting Online.
+*   **Idle Tracker Policy**: Sistem secara global memantau aktivitas. Jika tidak ada aktivitas selama 30 menit, sesi akan ditutup otomatis demi keamanan.
+
+---
+
+## 🔄 Alur Operasional & Penggunaan Menu
+
+Berikut adalah panduan alur pengguna dari awal hingga pengelolaan fitur:
+
+### 1. Alur Login & Sesi
+*   **Akses Pertama**: User melakukan Login/Registrasi. Sesi disimpan di **MySQL** dan **LocalStorage**.
+*   **Multi-Device**: Satu akun bisa masuk di berbagai browser/perangkat sekaligus tanpa saling memutus.
+*   **Persistensi**: Sesi tetap aktif selama 24 jam meskipun browser ditutup, kecuali jika terjadi **Idle** 30 menit atau Logout manual.
+*   **Logout Bersih**: Saat logout (manual atau idle), aplikasi melakukan `localStorage.clear()` untuk menghapus seluruh jejak data di perangkat.
+
+### 2. Penggunaan Modul Utama
+*   **Instant Chat**: Begitu masuk, status Anda otomatis menjadi **Online** di seluruh aplikasi. Muncul modal "Ringing" di tengah layar jika ada panggilan masuk, yang bisa di-*hide* ke bar atas.
+*   **WaBlaster**: Hubungkan WhatsApp via QR Code. Data sesi aman & terisolasi per user.
+*   **Timestamp Camera**: Akses kamera untuk absensi. Foto disimpan di server dengan watermark lokasi presisi (koordinat + alamat).
+*   **Maps ShareIt**: Cari lokasi atau bagikan lokasi Anda. Admin akan melakukan verifikasi (centang biru) melalui Panel Admin.
+*   **VConference**: Buat meeting, undang rekan melalui sistem notifikasi lonceng, dan gunakan fitur **PiP (Picture-in-Picture)** untuk tetap melihat video saat membuka menu lain.
+
+---
+
+## ⚙️ Alur Teknis & Arsitektur Sistem
+
+Dokumentasi teknis untuk pengembang dan pemeliharaan sistem:
+
+### 1. Arsitektur Frontend (Client-Side)
+*   **State Management**: Menggunakan Vue 3 **Reactive State** (`src/client/db.js`) untuk sinkronisasi data antar komponen.
+*   **Global Polling**: `App.vue` menjalankan background timer setiap 15-30 detik untuk:
+    - **Ping Online**: Memperbarui status hadir di server.
+    - **Unread Counter**: Menghitung pesan chat & notifikasi masuk secara real-time.
+    - **Idle Watcher**: Mendeteksi `mousemove/keydown` untuk mencegah auto-logout.
+*   **Secure Storage**: Data sensitif dienkripsi di tingkat aplikasi sebelum disimpan atau dikirim.
+
+### 2. Arsitektur Backend (Server-Side)
+*   **Middleware Authenticate**: Setiap request divalidasi silang terhadap tabel `sessions_id`. Menggunakan perbandingan **DATETIME (MySQL)** untuk menghindari masalah perbedaan zona waktu komputer.
+*   **Activity Lock**: Server memperbarui kolom `last_activity` pada setiap request API. Jika selisih `NOW()` dengan `last_activity` > 30 menit, request ditolak (401).
+*   **JSON Bridge**: Menggunakan `mysql2` untuk memproses data dinamis dari modul (PouchDB style) ke dalam struktur relasional MySQL.
+*   **Cleanup Worker**: Proses latar belakang (`setInterval`) yang membersihkan sesi mati di database setiap 5 menit.
 
 ---
 
