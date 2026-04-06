@@ -6,8 +6,11 @@
       </div>
     </Transition>
 
-    <header v-if="appHeaderVisible" class="app-header">
+    <header v-if="appHeaderVisible" 
+            class="app-header" 
+            :class="[route.meta.headerClass]">
       <div class="app-header-container">
+        <!-- Logo/Back Slot -->
         <div class="header-left-slot">
           <router-link v-if="route.path !== '/'" to="/" class="back-link" aria-label="Kembali ke home">
             <span class="back-icon">←</span>
@@ -17,6 +20,7 @@
           </div>
         </div>
 
+        <!-- Game Portal Slot -->
         <div class="header-center-col" :class="{ 'hide-mobile-specific': shouldHideCenterMobile }">
           <Transition name="rtc-strip-fade">
             <div
@@ -66,7 +70,7 @@
               </template>
             </div>
           </Transition>
-          <div id="app-header-portal" class="header-portal"></div>
+          <div id="app-header-portal" class="header-portal transition-all duration-300"></div>
         </div>
 
         <!-- User Info & Navigation -->
@@ -640,7 +644,7 @@ body {
 }
 
 .app-header {
-  min-height: 64px;
+  transition: all 0.3s ease;
   background: rgba(15, 23, 42, 0.7);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -651,6 +655,7 @@ body {
   display: flex;
   align-items: center;
   padding: 0.35rem 0;
+  min-height: 64px;
 }
 
 .app-header-container {

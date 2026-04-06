@@ -86,6 +86,34 @@ const routes = [
     component: () => import('../views/VconferenceView.vue'),
     meta: { title: 'Room Meeting', requiresAuth: true },
   },
+  {
+    path: '/mini-games',
+    name: 'MiniGames',
+    component: () => import('../views/MiniGamesView.vue'),
+    meta: { title: 'Mini Games', requiresAuth: false },
+  },
+  {
+    path: '/mini-games/solitaire',
+    name: 'Solitaire',
+    component: () => import('../views/SolitaireView.vue'),
+    meta: { 
+      title: 'Solitaire', 
+      requiresAuth: false, 
+      isCustomHeader: true,
+      headerClass: 'mb-0 !bg-transparent !border-0 !shadow-none !backdrop-blur-0'
+    },
+  },
+  {
+    path: '/mini-games/memory-match',
+    name: 'MemoryMatch',
+    component: () => import('../views/MemoryMatchView.vue'),
+    meta: { 
+      title: 'Memory Match', 
+      requiresAuth: false, 
+      isCustomHeader: true,
+      headerClass: 'mb-0 !bg-transparent !border-0 !shadow-none !backdrop-blur-0'
+    },
+  },
 ];
 
 const router = createRouter({
@@ -112,8 +140,8 @@ router.beforeEach((to, from, next) => {
     return next('/login');
   }
 
-  // 4. Public Access (Home, Camera, Maps ShareIt, Previews)
-  if (to.path === '/' || to.path === '/timestamp-camera' || to.path === '/maps-shareit' || to.path.startsWith('/wedding-invitation/preview')) {
+  // 4. Public Access (Home, Camera, Maps ShareIt, Previews, Mini Games)
+  if (to.path === '/' || to.path === '/timestamp-camera' || to.path === '/maps-shareit' || to.path.startsWith('/wedding-invitation/preview') || to.path.startsWith('/mini-games')) {
     return next();
   }
 

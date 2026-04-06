@@ -76,7 +76,20 @@ Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)
 *   **Undangan & notifikasi**: pembuat meeting dapat memilih pengguna dari daftar; setiap undangan baru menulis baris di **`user_notifications`** (tipe `meeting_invite`). Di **header** (sebelah ikon pesan) ada **ikon lonceng** dengan **badge jumlah belum dibaca**; panel daftar notifikasi, **tandai dibaca**, klik item menuju room meeting. Ringkasan polling: `GET /api/notifications?summary=1`.
 *   **API** (autentikasi): `GET /api/vconference`, `POST /api/vconference`, `GET /api/vconference/by-code/:code`, `POST /api/vconference/join`, `PATCH /api/vconference/:id`, `DELETE /api/vconference/:id`, `GET /api/vconference/invite-candidates`; notifikasi: `GET /api/notifications`, `PATCH /api/notifications/:id/read`, `POST /api/notifications/read-all`, `POST /api/notifications/mark-meeting-read` (body `{ "room_code" }`).
 
-### 9. Header global (setelah login)
+### 9. Mini Games (Hiburan & Skill)
+*   **Rute**: `/mini-games` (Hub), `/mini-games/solitaire` (Solitaire), `/mini-games/memory-match` (Memory Match).
+*   **Game Hub**: Antarmuka terpadu dengan efek hover dinamis dan glow ambient untuk memilih berbagai permainan.
+*   **Solitaire (Kartu Klasik)**: 
+    *   Implementasi logika kartu Klondike standar dengan sistem drag-and-drop.
+    *   Status permainan disimpan secara lokal (PWA persistence).
+    *   Deteksi kemenangan otomatis dengan efek visual yang memuaskan.
+*   **Memory Match (Latih Memori)**:
+    *   Sistem Difficulty: **Easy**, **Medium**, dan **Hard** dengan grid kartu yang menyesuaikan secara otomatis.
+    *   Mekanik *flip-and-match* yang halus dengan animasi kartu 3D.
+    *   Pembersihan otomatis kartu yang sudah cocok untuk visual yang lebih rapi.
+*   **Akses Offline**: Sebagai PWA, game tetap dapat dimainkan meskipun tanpa koneksi internet (Offline-ready).
+
+### 10. Header global (setelah login)
 *   **Pesan**: ikon ke `/instant-chat` dengan **badge merah** jumlah pesan Instant Chat belum dibaca (polling modul `instant_chat`).
 *   **Notifikasi**: ikon lonceng dengan **badge oranye** jumlah notifikasi **belum dibaca** (`user_notifications`), termasuk undangan Meeting Online.
 *   **Idle Tracker Policy**: Sistem secara global memantau aktivitas. Jika tidak ada aktivitas selama 30 menit, sesi akan ditutup otomatis demi keamanan.
@@ -99,6 +112,7 @@ Berikut adalah panduan alur pengguna dari awal hingga pengelolaan fitur:
 *   **Timestamp Camera**: Akses kamera untuk absensi. Foto disimpan di server dengan watermark lokasi presisi (koordinat + alamat).
 *   **Maps ShareIt**: Cari lokasi atau bagikan lokasi Anda. Admin akan melakukan verifikasi (centang biru) melalui Panel Admin.
 *   **VConference**: Buat meeting, undang rekan melalui sistem notifikasi lonceng, dan gunakan fitur **PiP (Picture-in-Picture)** untuk tetap melihat video saat membuka menu lain.
+*   **Mini Games**: Isi waktu luang dengan Solitaire atau asah otak dengan Memory Match langsung dari dashboard tanpa instalasi tambahan.
 
 ---
 
@@ -185,6 +199,9 @@ npm start
 *   `src/client/views/AdminView.vue`: Panel admin (Users, Maps Shareit Management, toggle verifikasi, modal konfirmasi).
 *   `src/client/views/VconferenceView.vue`: Meeting Online — form buat meeting, room Jitsi, PiP, undangan.
 *   `src/client/views/InstantMessagingView.vue`: UI Instant Chat, WebRTC, ringtone & suara end/decline.
+*   `src/client/views/MiniGamesView.vue`: Dashboard pusat permainan mini.
+*   `src/client/views/SolitaireView.vue`: Komponen permainan kartu Solitaire.
+*   `src/client/views/MemoryMatchView.vue`: Komponen permainan asah memori.
 *   `src/client/db.js`: Abstraksi data client-side & API Fetcher; helper Instant Chat unread (`migrateInstantChatReadMapOnce`, `countInstantChatUnread`, `setChatReadCursor`).
 *   `public/sound/`: Aset audio panggilan Instant Chat (`voice-call-ringing.mp3`, `video-call-ringing.mp3`, `end-decline-call.mp3`).
 

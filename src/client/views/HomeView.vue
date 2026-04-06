@@ -112,6 +112,20 @@
         </div>
       </div>
 
+      <!-- Mini Games -->
+      <div 
+        @click="handleModuleClick('mini-games')" 
+        class="menu-card icon-games-card active-card" 
+      >
+        <div class="icon-box games">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4-3c-.83 0-1.5-.67-1.5-1.5S18.67 9 19.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>
+        </div>
+        <div class="card-body">
+          <h3 class="card-title">Mini Games</h3>
+          <p class="card-desc">Permainan santai & hiburan.</p>
+        </div>
+      </div>
+
       <!-- Admin (Conditions) -->
       <div 
         v-if="authState.user?.role === 'admin'"
@@ -147,6 +161,9 @@ const handleModuleClick = (path) => {
   }
   if (path === 'maps-shareit') {
     return router.push('/maps-shareit');
+  }
+  if (path === 'mini-games') {
+    return router.push('/mini-games');
   }
 
   if (!authState.user) {
@@ -238,6 +255,7 @@ const handleModuleClick = (path) => {
 .meeting { background: linear-gradient(135deg, #6366f1, #7c3aed); }
 .maps { background: linear-gradient(135deg, #10b981, #059669); }
 .camera { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.games { background: linear-gradient(135deg, #f43f5e, #881337); }
 .admin-icon { background: linear-gradient(135deg, #64748b, #334155); }
 
 .card-title { margin: 0; font-size: 1.1rem; font-weight: 700; color: #f8fafc; }
