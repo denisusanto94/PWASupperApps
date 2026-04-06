@@ -78,17 +78,38 @@
           </div>
         </router-link>
 
-        <!-- Soon: Tic Tac Toe -->
-        <div class="group relative rounded-3xl overflow-hidden bg-white/5 border border-white/5 opacity-60 grayscale hover:grayscale-0 transition-all duration-500">
-          <div class="h-48 sm:h-56 bg-gradient-to-br from-rose-600/40 to-rose-900/40 flex items-center justify-center text-rose-400 text-6xl">
-            ⭕️
+        <!-- Snake and Ladders Card -->
+        <router-link to="/mini-games/snake-and-ladders" class="group relative block rounded-3xl overflow-hidden transition-all duration-500 transform hover:-translate-y-2 hover:scale-[1.02]">
+          <!-- Card Glow -->
+          <div class="absolute inset-0 bg-gradient-to-br from-rose-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+          
+          <div class="h-48 sm:h-56 bg-gradient-to-br from-rose-600 to-rose-900 flex items-center justify-center relative overflow-hidden border-b border-white/10">
+            <!-- Decorative Elements -->
+            <div class="absolute transform -rotate-6 translate-x-[-20px] translate-y-[-10px] w-20 h-20 bg-white/20 backdrop-blur-md rounded-2xl border border-white/20 shadow-2xl flex items-center justify-center text-4xl group-hover:rotate-[-12deg] transition-all duration-500 group-hover:translate-y-[-20px]">
+              🎲
+            </div>
+            <div class="absolute transform rotate-12 translate-x-[20px] translate-y-[20px] w-20 h-20 bg-white/20 backdrop-blur-md rounded-2xl border border-white/20 shadow-2xl flex items-center justify-center text-4xl group-hover:rotate-[20deg] transition-all duration-500 group-hover:translate-y-[30px]">
+              🐍
+            </div>
+            <div class="z-20 text-white font-black text-6xl drop-shadow-2xl scale-125 group-hover:scale-150 transition-transform duration-700">
+              🪜
+            </div>
           </div>
-          <div class="p-6">
-            <h2 class="text-2xl font-black text-white/50 mb-2">Tic Tac Toe</h2>
-            <p class="text-slate-500 text-sm mb-4">Atur strategi untuk memenangkan permainan legendaris ini.</p>
-            <span class="text-xs font-bold text-slate-600 uppercase tracking-widest border border-slate-700/50 px-3 py-1 rounded-full bg-slate-800/30">SEGERA HADIR</span>
+          
+          <div class="p-6 bg-white/5 backdrop-blur-xl border-x border-b border-white/10 group-hover:bg-white/10 transition-colors">
+            <div class="flex justify-between items-start mb-3">
+              <h2 class="text-2xl font-black text-white">Ular Tangga</h2>
+              <span class="px-3 py-1 bg-rose-500/20 text-rose-400 text-[10px] font-bold uppercase tracking-widest rounded-full border border-rose-500/20">Fun</span>
+            </div>
+            <p class="text-slate-400 text-sm leading-relaxed mb-4">
+              Jelajahi papan penuh kejutan! Hindari ular dan daki tangga menuju puncak kemenangan.
+            </p>
+            <div class="flex items-center text-rose-400 text-sm font-bold gap-2 group-hover:gap-4 transition-all">
+              <span>MAINKAN SEKARANG</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+            </div>
           </div>
-        </div>
+        </router-link>
       </div>
     </div>
   </div>

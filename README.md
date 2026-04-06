@@ -77,7 +77,7 @@ Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)
 *   **API** (autentikasi): `GET /api/vconference`, `POST /api/vconference`, `GET /api/vconference/by-code/:code`, `POST /api/vconference/join`, `PATCH /api/vconference/:id`, `DELETE /api/vconference/:id`, `GET /api/vconference/invite-candidates`; notifikasi: `GET /api/notifications`, `PATCH /api/notifications/:id/read`, `POST /api/notifications/read-all`, `POST /api/notifications/mark-meeting-read` (body `{ "room_code" }`).
 
 ### 9. Mini Games (Hiburan & Skill)
-*   **Rute**: `/mini-games` (Hub), `/mini-games/solitaire` (Solitaire), `/mini-games/memory-match` (Memory Match).
+*   **Rute**: `/mini-games` (Hub), `/mini-games/solitaire` (Solitaire), `/mini-games/memory-match` (Memory Match), `/mini-games/snake-and-ladders` (Ular Tangga).
 *   **Game Hub**: Antarmuka terpadu dengan efek hover dinamis dan glow ambient untuk memilih berbagai permainan.
 *   **Solitaire (Kartu Klasik)**: 
     *   Implementasi logika kartu Klondike standar dengan sistem drag-and-drop.
@@ -87,6 +87,12 @@ Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)
     *   Sistem Difficulty: **Easy**, **Medium**, dan **Hard** dengan grid kartu yang menyesuaikan secara otomatis.
     *   Mekanik *flip-and-match* yang halus dengan animasi kartu 3D.
     *   Pembersihan otomatis kartu yang sudah cocok untuk visual yang lebih rapi.
+*   **Snake and Ladders (Island Quest)**:
+    *   **Thematic High-Fidelity**: Mengusung tema "Island Quest" dengan papan kustom beresolusi tinggi **1730x1677** yang dikunci aspect ratio-nya untuk pengalaman visual premium.
+    *   **Monopoly-Style Physics**: Pergerakan token kini menggunakan sistem "Tactile Hopping" — lompatan ritmis per kotak dengan efek squash-and-stretch yang memberikan sensasi bermain papan fisik nyata.
+    *   **Tropical Journey Logic**: Implementasi 11 rute interaksi unik (Tangga bambu, jembatan putus, sarang laba-laba, hingga jebakan monyet) dengan narasi petualangan yang imersif.
+    *   **Advanced UI/UX**: Kontrol dadu berbasis *glassmorphism*, animasi roll-dice (GIF), dan overlay kemenangan "Grand Explorer" yang elegan namun compact.
+    *   **Multiplayer & Bot Support**: Mode 1 Player (vs Intelligent Bot), 2 Players, 3 Players, hingga 4 Players dengan status pemain yang tersinkronisasi.
 *   **Akses Offline**: Sebagai PWA, game tetap dapat dimainkan meskipun tanpa koneksi internet (Offline-ready).
 
 ### 10. Header global (setelah login)
@@ -202,6 +208,7 @@ npm start
 *   `src/client/views/MiniGamesView.vue`: Dashboard pusat permainan mini.
 *   `src/client/views/SolitaireView.vue`: Komponen permainan kartu Solitaire.
 *   `src/client/views/MemoryMatchView.vue`: Komponen permainan asah memori.
+*   `src/client/views/SnakeAndLaddersView.vue`: Komponen permainan ular tangga (Multiplayer/Bot).
 *   `src/client/db.js`: Abstraksi data client-side & API Fetcher; helper Instant Chat unread (`migrateInstantChatReadMapOnce`, `countInstantChatUnread`, `setChatReadCursor`).
 *   `public/sound/`: Aset audio panggilan Instant Chat (`voice-call-ringing.mp3`, `video-call-ringing.mp3`, `end-decline-call.mp3`).
 

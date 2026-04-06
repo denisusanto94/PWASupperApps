@@ -114,6 +114,17 @@ const routes = [
       headerClass: 'mb-0 !bg-transparent !border-0 !shadow-none !backdrop-blur-0'
     },
   },
+  {
+    path: '/mini-games/snake-and-ladders',
+    name: 'SnakeAndLadders',
+    component: () => import('../views/SnakeAndLaddersView.vue'),
+    meta: { 
+      title: 'Ular Tangga', 
+      requiresAuth: false, 
+      isCustomHeader: true,
+      headerClass: 'mb-0 !bg-transparent !border-0 !shadow-none !backdrop-blur-0'
+    },
+  },
 ];
 
 const router = createRouter({

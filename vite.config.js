@@ -61,6 +61,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        maximumFileSizeToCacheInBytes: 50 * 1024 * 1024,
         navigateFallbackDenylist: [/^\/version\.json$/],
         runtimeCaching: [
           {
@@ -87,6 +88,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    chunkSizeWarningLimit: 5000,
     rollupOptions: {
       input: path.resolve(__dirname, 'index.html'),
     },
