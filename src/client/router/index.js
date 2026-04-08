@@ -116,10 +116,21 @@ const routes = [
   },
   {
     path: '/mini-games/snake-and-ladders',
+    name: 'SnakeAndLaddersCategory',
+    component: () => import('../views/SnakeAndLaddersCategoryView.vue'),
+    meta: { 
+      title: 'Choose Realm', 
+      requiresAuth: false, 
+      isCustomHeader: true,
+      headerClass: 'mb-0 !bg-transparent !border-0 !shadow-none !backdrop-blur-0'
+    },
+  },
+  {
+    path: '/mini-games/snake-and-ladders/island-quest',
     name: 'SnakeAndLadders',
     component: () => import('../views/SnakeAndLaddersView.vue'),
     meta: { 
-      title: 'Ular Tangga', 
+      title: 'Island Quest', 
       requiresAuth: false, 
       isCustomHeader: true,
       headerClass: 'mb-0 !bg-transparent !border-0 !shadow-none !backdrop-blur-0'

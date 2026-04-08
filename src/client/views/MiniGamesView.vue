@@ -98,11 +98,11 @@
           
           <div class="p-6 bg-white/5 backdrop-blur-xl border-x border-b border-white/10 group-hover:bg-white/10 transition-colors">
             <div class="flex justify-between items-start mb-3">
-              <h2 class="text-2xl font-black text-white">Ular Tangga</h2>
-              <span class="px-3 py-1 bg-rose-500/20 text-rose-400 text-[10px] font-bold uppercase tracking-widest rounded-full border border-rose-500/20">Fun</span>
+              <h2 class="text-2xl font-black text-white leading-tight">Snake & Ladders: Realms</h2>
+              <span class="px-3 py-1 bg-rose-500/20 text-rose-400 text-[10px] font-bold uppercase tracking-widest rounded-full border border-rose-500/20">Multiworld</span>
             </div>
             <p class="text-slate-400 text-sm leading-relaxed mb-4">
-              Jelajahi papan penuh kejutan! Hindari ular dan daki tangga menuju puncak kemenangan.
+              Pilih duniamu: Jelajahi pulau tropis atau seberangi samudera luas. Hindari ular dan daki tangga!
             </p>
             <div class="flex items-center text-rose-400 text-sm font-bold gap-2 group-hover:gap-4 transition-all">
               <span>MAINKAN SEKARANG</span>
