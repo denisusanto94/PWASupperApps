@@ -18,12 +18,42 @@
               <div class="form-group slide-up">
                 <label class="field-label">📅 Tanggal & Waktu</label>
                 <div class="date-time-picker">
-                  <input type="date" v-model="selectedDate" class="form-input platinum-input" />
-                  <input type="time" v-model="selectedTime" class="form-input platinum-input" />
+                  <input type="date" v-model="selectedDate" class="form-input platinum-input datetime-field" />
+                  <input type="time" v-model="selectedTime" class="form-input platinum-input datetime-field" />
                 </div>
               </div>
 
               <div class="form-group slide-up" style="animation-delay: 0.05s">
+                <label class="field-label">🖋️ Ketebalan teks di foto</label>
+                <div class="font-weight-row" role="group" aria-label="Ketebalan font overlay">
+                  <button
+                    type="button"
+                    class="weight-chip"
+                    :class="{ active: overlayFontWeight === 'regular' }"
+                    @click="overlayFontWeight = 'regular'"
+                  >
+                    Regular
+                  </button>
+                  <button
+                    type="button"
+                    class="weight-chip"
+                    :class="{ active: overlayFontWeight === 'medium' }"
+                    @click="overlayFontWeight = 'medium'"
+                  >
+                    Medium
+                  </button>
+                  <button
+                    type="button"
+                    class="weight-chip"
+                    :class="{ active: overlayFontWeight === 'bold' }"
+                    @click="overlayFontWeight = 'bold'"
+                  >
+                    Bold
+                  </button>
+                </div>
+              </div>
+
+              <div class="form-group slide-up" style="animation-delay: 0.08s">
                 <label class="field-label">🖋️ Font Size ({{ overlayFontSize }}px)</label>
                 <div class="font-size-control">
                   <input type="range" v-model.number="overlayFontSize" min="16" max="72" step="2" class="range-input" />
@@ -34,7 +64,7 @@
                 </div>
               </div>
 
-              <div class="form-group slide-up" style="animation-delay: 0.1s">
+              <div class="form-group slide-up" style="animation-delay: 0.12s">
                 <label class="field-label">🔍 Cari Lokasi</label>
                 <div class="search-box">
                   <input type="text" v-model="searchQuery" placeholder="Cari alamat atau tempat..." class="form-input search-input" @keyup.enter="searchLocation" />
@@ -50,7 +80,7 @@
                 </div>
               </div>
 
-              <div class="form-group mb-0 slide-up" style="animation-delay: 0.2s">
+              <div class="form-group mb-0 slide-up" style="animation-delay: 0.18s">
                 <div class="label-with-action">
                   <label class="field-label">📍 Lokasi Presisi</label>
                   <button @click="getLocation" class="btn-refresh-mini" :class="{ rotating: loadingLocation }">
@@ -204,8 +234,10 @@ const activeMethod = ref('camera'); // 'camera' or 'upload'
 const history = ref([]);
 const previewImage = ref(null);
 
-// New: Font Size Overlay State
-const overlayFontSize = ref(32);
+/** Overlay di foto: ukuran & ketebalan font */
+const overlayFontSize = ref(42);
+/** 'regular' | 'medium' | 'bold' — nilai numerik dipakai di canvas */
+const overlayFontWeight = ref('medium');
 
 
 // Date & Time Logic
@@ -230,6 +262,13 @@ const searching = ref(false);
 let map = null;
 let marker = null;
 let stream = null;
+/** Foto saja (tanpa teks overlay) — dipakai ulang saat font/tanggal/alamat diubah agar Live Preview update */
+let baseLayerCanvas = null;
+
+const NOMINATIM_HEADERS = {
+  'Accept-Language': 'id-ID,id;q=0.9,en;q=0.5',
+  'User-Agent': 'PWASupperApps/1.0 (timestamp-camera; +https://openstreetmap.org/copyright)'
+};
 
 const setMethod = (method) => {
   activeMethod.value = method;
@@ -332,6 +371,7 @@ const processImageSource = async (source) => {
   if (!canvas.value) {
     showToast('Gagal memproses gambar. Silakan coba lagi.', 'error');
     capturedImage.value = null;
+    baseLayerCanvas = null;
     return;
   }
 
@@ -362,15 +402,52 @@ const processImageSource = async (source) => {
 
   canvas.value.width = targetWidth;
   canvas.value.height = targetHeight;
-  
+
+  if (!baseLayerCanvas || baseLayerCanvas.width !== targetWidth || baseLayerCanvas.height !== targetHeight) {
+    baseLayerCanvas = document.createElement('canvas');
+    baseLayerCanvas.width = targetWidth;
+    baseLayerCanvas.height = targetHeight;
+  }
+  const baseCtx = baseLayerCanvas.getContext('2d');
+  baseCtx.imageSmoothingEnabled = true;
+  baseCtx.imageSmoothingQuality = 'high';
+  baseCtx.drawImage(source, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight);
+
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-  
-  ctx.drawImage(source, sx, sy, sw, sh, 0, 0, targetWidth, targetHeight);
-  
+  ctx.drawImage(baseLayerCanvas, 0, 0);
+
   drawOverlay();
 };
 
+const redrawCanvasPreview = () => {
+  if (!canvas.value || !baseLayerCanvas) return;
+  const ctx = canvas.value.getContext('2d');
+  ctx.drawImage(baseLayerCanvas, 0, 0);
+  drawOverlay();
+};
+
+const OVERLAY_WEIGHT_NUM = { regular: 400, medium: 500, bold: 700 };
+
+const drawOverlayLineRight = (ctx, line, rightX, y, extraWordGapPx) => {
+  const trimmed = line.trim();
+  if (!trimmed) return;
+  const words = trimmed.split(/\s+/);
+  if (words.length <= 1) {
+    ctx.fillText(trimmed, rightX, y);
+    return;
+  }
+  let penRight = rightX;
+  for (let i = words.length - 1; i >= 0; i--) {
+    const word = words[i];
+    ctx.fillText(word, penRight, y);
+    const wordW = ctx.measureText(word).width;
+    penRight -= wordW;
+    if (i > 0) {
+      penRight -= ctx.measureText(' ').width + extraWordGapPx;
+    }
+  }
+};
 
 const drawOverlay = () => {
   if (!canvas.value) return;
@@ -381,7 +458,7 @@ const drawOverlay = () => {
   const dateObj = new Date(currentDateTimeStr.value);
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
   const dateFormatted = `${dateObj.getDate()} ${months[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
-  const timeFormatted = `${selectedTime.value}:${String(new Date().getSeconds()).padStart(2, '0')}`; 
+  const timeFormatted = `${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}:${String(dateObj.getSeconds()).padStart(2, '0')}`;
 
   const line1 = `${dateFormatted} ${timeFormatted}`;
   
@@ -393,39 +470,75 @@ const drawOverlay = () => {
   
   const addr = addressObj.value?.address || {};
   const houseNo = addr.house_number ? `No.${addr.house_number} ` : '';
-  const streetName = addr.road || addr.pedestrian || '';
-  
-  const line3 = `${houseNo}${streetName}`;
-  const line4 = `${addr.village || addr.suburb || addr.neighbourhood || addr.hamlet || ''}`;
-  const line5 = `Kecamatan ${addr.city_district || addr.district || addr.municipality || ''}`;
-  const line6 = `Kota ${addr.city || addr.town || addr.county || ''}`;
-  const line7 = `${addr.state || ''}`;
+  const streetRaw = `${houseNo}${addr.road || addr.pedestrian || ''}`.trim();
 
-  const allLines = [line1, line2, line3, line4, line5, line6, line7];
+  const kelurahanCore = (addr.village || addr.neighbourhood || addr.hamlet || '').trim();
+  const suburb = (addr.suburb || '').trim();
+  const kecamatanCore = (addr.city_district || addr.district || addr.municipality || '').trim();
+
+  const addressLines = [];
+  if (streetRaw) addressLines.push(streetRaw);
+
+  if (kelurahanCore) {
+    addressLines.push(`Kelurahan ${kelurahanCore}`);
+  } else if (suburb && kecamatanCore) {
+    addressLines.push(`Kelurahan ${suburb}`);
+  }
+
+  if (kecamatanCore) {
+    addressLines.push(`Kecamatan ${kecamatanCore}`);
+  } else if (suburb) {
+    addressLines.push(`Kecamatan ${suburb}`);
+  }
+
+  const kotaCore = (addr.city || addr.town || addr.county || '').trim();
+  if (kotaCore) addressLines.push(`Kota ${kotaCore}`);
+
+  const stateRaw = (addr.state || '').trim();
+  if (stateRaw) addressLines.push(stateRaw);
+
+  const allLines = [line1, line2, ...addressLines];
 
   ctx.fillStyle = 'white';
   ctx.textAlign = 'right';
-  
-  // Use user-selected font size
-  const fontSize = overlayFontSize.value;
-  ctx.font = `bold ${fontSize}px Arial`;
-  
+  ctx.textBaseline = 'alphabetic';
+
+  const fontSize = Math.max(8, Math.min(120, Number(overlayFontSize.value) || 42));
+  const weightNum = OVERLAY_WEIGHT_NUM[overlayFontWeight.value] ?? 500;
+  ctx.font = `${weightNum} ${fontSize}px Arial`;
+
+  /* Kerning & jarak antar kata (em ke px mengikuti ukuran font) */
+  const letterExtraPx = fontSize * 0.032;
+  const wordExtraPx = fontSize * 0.085;
+  const hadLetterSpacing = 'letterSpacing' in ctx;
+  const hadWordSpacing = 'wordSpacing' in ctx;
+  if (hadLetterSpacing) ctx.letterSpacing = `${letterExtraPx}px`;
+  if (hadWordSpacing) ctx.wordSpacing = `${wordExtraPx}px`;
+
   ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
   ctx.shadowBlur = 6;
   ctx.shadowOffsetX = 2;
   ctx.shadowOffsetY = 2;
-  
-  const edgePadding = 10;
-  const lineHeight = fontSize * 1.2; 
-  
-  const linesToDraw = allLines.filter(line => line.trim());
-  let currentY = h - edgePadding - ((linesToDraw.length - 1) * lineHeight);
-  
-  linesToDraw.forEach(line => {
-    ctx.fillText(line, w - edgePadding, currentY);
+
+  const paddingRight = 14;
+  const paddingBottom = 18;
+  const lineHeight = fontSize * 1.2;
+
+  const linesToDraw = allLines.filter((line) => line.trim());
+  let currentY = h - paddingBottom - (linesToDraw.length - 1) * lineHeight;
+  const rightX = w - paddingRight;
+
+  linesToDraw.forEach((line) => {
+    if (hadWordSpacing) {
+      ctx.fillText(line, rightX, currentY);
+    } else {
+      drawOverlayLineRight(ctx, line, rightX, currentY, wordExtraPx);
+    }
     currentY += lineHeight;
   });
-  
+
+  if (hadLetterSpacing) ctx.letterSpacing = '0px';
+  if (hadWordSpacing) ctx.wordSpacing = '0px';
   ctx.shadowBlur = 0;
 };
 
@@ -444,6 +557,7 @@ const viewHistoryImage = (img) => {
 const resetView = () => {
   capturedImage.value = null;
   cameraStarted.value = false;
+  baseLayerCanvas = null;
   stopCamera();
 };
 
@@ -453,7 +567,11 @@ const searchLocation = async () => {
   searching.value = true;
   searchResults.value = [];
   try {
-    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery.value)}&limit=5&addressdetails=1`);
+    const q = encodeURIComponent(searchQuery.value);
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${q}&limit=5&addressdetails=1&accept-language=id`,
+      { headers: NOMINATIM_HEADERS }
+    );
     const data = await response.json();
     searchResults.value = data;
     if (data.length === 0) showToast('Lokasi tidak ditemukan.', 'warning');
@@ -476,7 +594,10 @@ const selectLocation = (result) => {
 
 const getLocationAddress = async (lat, lng) => {
   try {
-    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1&accept-language=id`,
+      { headers: NOMINATIM_HEADERS }
+    );
     const data = await response.json();
     addressObj.value = data;
   } catch (err) {
@@ -501,10 +622,14 @@ const getLocation = () => {
       await getLocationAddress(coords.value.lat, coords.value.lng);
       loadingLocation.value = false;
     },
-    (err) => {
+    async (err) => {
       showToast('Gagal ambil lokasi.', 'error');
+      coords.value.lat = -6.1754;
+      coords.value.lng = 106.8272;
+      updateMap(-6.1754, 106.8272);
+      loadingLocation.value = true;
+      await getLocationAddress(-6.1754, 106.8272);
       loadingLocation.value = false;
-      updateMap(-6.1754, 106.8272); 
     },
     { enableHighAccuracy: true }
   );
@@ -574,8 +699,19 @@ watch(
   }
 );
 
+watch(
+  [overlayFontSize, overlayFontWeight, selectedDate, selectedTime, addressObj, coords],
+  async () => {
+    if (!capturedImage.value || !baseLayerCanvas || !canvas.value) return;
+    await nextTick();
+    redrawCanvasPreview();
+  },
+  { deep: true, flush: 'post' }
+);
+
 onUnmounted(() => {
   stopCamera();
+  baseLayerCanvas = null;
 });
 
 </script>
@@ -691,6 +827,61 @@ onUnmounted(() => {
 .date-time-picker {
   display: flex;
   gap: 0.75rem;
+}
+
+/* Ikon kalender/jam: SVG putih menggantikan aset native (sering hitam di tema gelap) */
+.datetime-field {
+  color-scheme: dark;
+}
+
+.datetime-field::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 1;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  margin: 0 0 0 0.15rem;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 1.125rem 1.125rem;
+}
+
+.datetime-field[type='date']::-webkit-calendar-picker-indicator {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='4' width='18' height='18' rx='2' ry='2'/%3E%3Cline x1='16' y1='2' x2='16' y2='6'/%3E%3Cline x1='8' y1='2' x2='8' y2='6'/%3E%3Cline x1='3' y1='10' x2='21' y2='10'/%3E%3C/svg%3E");
+}
+
+.datetime-field[type='time']::-webkit-calendar-picker-indicator {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M12 6v6l4 2'/%3E%3C/svg%3E");
+}
+
+.font-weight-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.weight-chip {
+  flex: 1;
+  padding: 0.65rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #94a3b8;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+}
+
+.weight-chip:hover {
+  color: #e2e8f0;
+  border-color: rgba(245, 158, 11, 0.25);
+}
+
+.weight-chip.active {
+  color: #fff;
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.45);
+  box-shadow: 0 2px 12px rgba(245, 158, 11, 0.12);
 }
 
 .range-labels {

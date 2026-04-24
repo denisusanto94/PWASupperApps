@@ -77,7 +77,7 @@ Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)
 *   **API** (autentikasi): `GET /api/vconference`, `POST /api/vconference`, `GET /api/vconference/by-code/:code`, `POST /api/vconference/join`, `PATCH /api/vconference/:id`, `DELETE /api/vconference/:id`, `GET /api/vconference/invite-candidates`; notifikasi: `GET /api/notifications`, `PATCH /api/notifications/:id/read`, `POST /api/notifications/read-all`, `POST /api/notifications/mark-meeting-read` (body `{ "room_code" }`).
 
 ### 9. Mini Games (Hiburan & Skill)
-*   **Rute**: `/mini-games` (Hub), `/mini-games/solitaire` (Solitaire), `/mini-games/memory-match` (Memory Match), `/mini-games/snake-and-ladders` (Ular Tangga).
+*   **Rute**: `/mini-games` (Hub), `/mini-games/solitaire` (Solitaire), `/mini-games/memory-match` (Memory Match), `/mini-games/snake-and-ladders` (pemilih **realm** — Choose Realm), `/mini-games/snake-and-ladders/island-quest` (permainan **Island Quest**).
 *   **Game Hub**: Antarmuka terpadu dengan efek hover dinamis dan glow ambient untuk memilih berbagai permainan.
 *   **Solitaire (Kartu Klasik)**: 
     *   Implementasi logika kartu Klondike standar dengan sistem drag-and-drop.
@@ -87,13 +87,96 @@ Aplikasi ini terdiri dari beberapa modul utama dengan sistem **Multi-User (Auth)
     *   Sistem Difficulty: **Easy**, **Medium**, dan **Hard** dengan grid kartu yang menyesuaikan secara otomatis.
     *   Mekanik *flip-and-match* yang halus dengan animasi kartu 3D.
     *   Pembersihan otomatis kartu yang sudah cocok untuk visual yang lebih rapi.
-*   **Snake and Ladders (Island Quest)**:
-    *   **Thematic High-Fidelity**: Mengusung tema "Island Quest" dengan papan kustom beresolusi tinggi **1730x1677** yang dikunci aspect ratio-nya untuk pengalaman visual premium.
-    *   **Monopoly-Style Physics**: Pergerakan token kini menggunakan sistem "Tactile Hopping" — lompatan ritmis per kotak dengan efek squash-and-stretch yang memberikan sensasi bermain papan fisik nyata.
-    *   **Tropical Journey Logic**: Implementasi 11 rute interaksi unik (Tangga bambu, jembatan putus, sarang laba-laba, hingga jebakan monyet) dengan narasi petualangan yang imersif.
-    *   **Advanced UI/UX**: Kontrol dadu berbasis *glassmorphism*, animasi roll-dice (GIF), dan overlay kemenangan "Grand Explorer" yang elegan namun compact.
-    *   **Multiplayer & Bot Support**: Mode 1 Player (vs Intelligent Bot), 2 Players, 3 Players, hingga 4 Players dengan status pemain yang tersinkronisasi.
-*   **Akses Offline**: Sebagai PWA, game tetap dapat dimainkan meskipun tanpa koneksi internet (Offline-ready).
+*   **Snake and Ladders — Island Quest** (implementasi: `SnakeAndLaddersView.vue`; hub realm: `SnakeAndLaddersCategoryView.vue`):
+    *   Papan **10×10** (100 petak), tata letak **ular tangga klasik** (baris zig-zag); token mulai dari petak **1**, kemenangan tepat di petak **100**.
+    *   Dadu **1–6** acak seragam per lempar (satu ketukan **ROLL**); animasi lempar + pergerakan token per langkah; **zoom** ke baris petak saat jalan (diperkuat di tampilan *mobile/tablet landscape* pendek).
+    *   **Tangga & ular**, **jebakan**, **petak kesempatan** (kartu acak), **inventaris** — detail, daftar petak, dan **dek kartu** ada di subbagian [§9.1 Island Quest — aturan permainan](#island-quest-rules) di bawah.
+*   **Akses Offline**: Sebagai PWA, game tetap dapat dimainkan meskipun tanpa koneksi internet (Offline-ready; aset statis dari `public/`).
+
+<a id="island-quest-rules"></a>
+
+#### 9.1 Island Quest — aturan permainan
+
+Berikut ini mencerminkan logika di `src/client/views/SnakeAndLaddersView.vue` (April 2026).
+
+##### A. Alur singkat & antarmuka
+1. Dari **`/mini-games/snake-and-ladders`**, pilih realm **Island Quest** untuk masuk **`/mini-games/snake-and-ladders/island-quest`**.
+2. **Lobby**: pilih jumlah pemain (**1** = solo + lawan **bot** sebagai pemain 2, **2–4** = manusia). Tombol **START** memulai sesi baru.
+3. **Permainan**: layar *landscape* disarankan; di ponsel portrait dapat muncul pengingat memutar perangkat / mengunci orientasi.
+4. **Header**: judul *Island Quest*; **Menu** / **Abandon Mission** kembali ke lobby atau ke hub realm (jika belum memilih jumlah pemain).
+5. **Panel kiri** (≥`sm`): skor per pemain, posisi `#petak`, ikon **tas** membuka **inventaris** (hanya relevan saat giliran sendiri untuk memakai kartu).
+6. **Panel kanan**: dadu 3D / GIF lempar, tombol **ROLL** (nonaktif saat bot bergilir — bot melempar otomatis).
+7. **Kemenangan**: overlay **Grand Explorer** untuk pemain yang tepat di petak **100**; **PLAY AGAIN** atau **EXIT**.
+
+##### B. Pergerakan & dadu
+*   Giliran: secara bergantian `P1 → P2 → …` (indeks pemain di-*wrap*).
+*   **Lempar dadu**: hasil **1–6** dengan distribusi seragam; setelah animasi, token **melangkah per petak** (animasi *hop*) sejumlah mata dadu.
+*   **Melebihi 100 (*bounce*)**: jika langkah akan melampaui 100, token maju ke 100 lalu **sisa langkah dijalankan mundur** (memantul dari finis).
+*   **Terjebak pasir / jaring**: saat terjebak, lempar dadu khusus untuk mencoba keluar: mata **6** = berhasil keluar **dan** berjalan **6** langkah; selain itu **counter jebakan** turun satu per giliran coba; saat counter habis tanpa lepas, giliran tetap berganti sesuai kode.
+
+##### C. Tangga (*ladders*)
+Berlaku jika pendaratan **tepat** di petak `start` (lalu naik ke `end`):
+
+| Start | End | Catatan (narasi dalam game) |
+|:---:|:---:|---|
+| 15 | 34 | Tangga Bambu |
+| 23 | 44 | Tangga Kayu |
+| 35 | 95 | Tangga Raksasa |
+| 63 | 97 | Tangga Gantung |
+| 33 | 50 | Jembatan Gantung |
+| 68 | 90 | Jembatan Tali |
+| 72 | 90 | Naik Burung |
+
+##### D. Ular (*snakes*)
+Berlaku jika pendaratan **tepat** di petak `start` (lalu turun ke `end`). **Imun** tidak berlaku untuk kepala ular (hanya untuk jebakan; lihat §E).
+
+| Start | End | Catatan |
+|:---:|:---:|---|
+| 98 | 8 | Ular Kobra |
+| 32 | 29 | Ular Hijau |
+| 39 | 40 | Lilitan Ular |
+| 59 | 41 | Ular Ungu |
+| 92 | 73 | Ular Sanca |
+| 49 | 8 | Air Terjun Raksasa |
+
+##### E. Jebakan (*traps*)
+| Petak | Efek |
+|:---:|---|
+| **11** | **Jebakan monyet**: langsung mundur ke petak **2**. |
+| **21**, **22** | **Pasir hisap**: terjebak **3 giliran** coba lempar atau keluar dengan dadu **6** (lihat §B). |
+| **41** | **Jaring laba-laba**: aturan sama seperti pasir hisap. |
+
+Saat memasuki petak jebakan dan pemain punya **Imun** di tas, muncul pilihan: buka tas pakai **Imun** (kartu habis, efek jebakan dibatalkan) atau **Terima jebakan**. **Bot** (mode solo) tidak mendapat jeda pilihan—jebakan langsung diterapkan meskipun ada Imun. Kartu **Penyelamatan Pasir** / **Penyelamatan Jaring** hanya dipakai saat giliran sendiri saat **sudah terjebak** jenis jebakan yang sesuai.
+
+##### F. Petak kesempatan (*chance tiles*)
+Jika berhenti di salah satu petak berikut, diundi **satu kartu** acak dari **dek** (§G): **10, 20, 25, 42, 70, 80, 91, 96**.
+
+*   Kartu **Persistent** masuk **inventaris**; pemain menutup modal dengan **EQUIP PACK**, lalu giliran berganti ke pemain berikutnya.
+*   Kartu **Instant** menutup otomatis setelah jeda singkat. **Hanya** kartu **`extra`** dan **`lewati`** yang mengubah alur giliran khusus: **`extra`** memberi **satu lempar dadu lagi** tanpa berganti giliran; **`lewati`** langsung mengalihkan giliran ke pemain berikutnya. Kartu instant lainnya (mis. `maju_1`, `mundur_1`) setelah efek selesai **giliran berganti**, kecuali undian berantai memicu kartu lagi (mis. mendarat di petak kesempatan setelah maju).
+
+##### G. Dek kartu (`public/snake-and-ladders/card-jugle/`)
+Semua entri di bawah diambil acak dengan probabilitas seragam per undian. Kolom **Berkas** = nama file gambar di folder `card-jugle/`.
+
+| ID | Nama | Tipe | Berkas | Deskripsi / perilaku |
+|---|---|---|---|---|
+| `imun` | Imun Rintangan | Persistent | `imun-terhadap-semua-rintangan.png` | Hanya bisa dipakai dari tas saat **jebakan** mengancam (muncul overlay pilihan setelah mendarat di petak jebakan **11 / 21 / 22 / 41** sambil memegang Imun). Membatalkan efek jebakan itu; kartu habis. |
+| `pertahanan` | Pertahanan | Persistent | `kartu-pertahanan-terhadap-semua-serangan.png` | **Tidak diklik**: otomatis membatalkan satu **Serangan** (kartu Pertahanan habis). Jika diklik dari tas, hanya pesan penjelasan. |
+| `serangan` | Serangan Kurangi | Persistent | `kartu-serangan-pilih-lawan-untuk-mundur-3-langkah.png` | Saat giliran sendiri: buka modal **pilih pemain lawan**; lawan mundur **3** petak kecuali punya **Pertahanan** (lawan kehilangan Pertahanan, tidak mundur). |
+| `save_jaring` | Penyelamatan Jaring | Persistent | `penyelamatan-keluar-dari-jaring-laba-laba.png` | Hanya saat **terjebak jaring** (`trapType` laba). |
+| `save_pasir` | Penyelamatan Pasir | Persistent | `penyelamatan-keluar-dari-pasir-hisap.png` | Hanya saat **terjebak pasir** (`trapType` pasir). |
+| `maju_1` | Maju 1 Langkah | Instant | `jalan-maju-1-langkah.png` | Langsung maju **1** petak (dengan pantulan jika melewati 100), lalu selesaikan ular/tangga/jebakan/kesempatan seperti biasa; **giliran berganti** (kecuali rantai kartu). Jika petak tujuan jebakan → terjebak. |
+| `maju_2` | Maju 2 Langkah | Instant | `jalan-maju-2-langkah.png` | Sama seperti `maju_1`, maju **2** petak. |
+| `mundur_1` | Mundur 1 Langkah | Instant | `jalan-mundur-1-langkah.png` | Mundur **1** petak (min. 1), lalu resolusi papan; **giliran berganti**. |
+| `lewati` | Lewati Giliran | Instant | `lewati-jalan-giliran-dadu-berikan-giliran-ke-lawan.png` | **Giliran langsung** ke pemain berikutnya (tanpa mengubah posisi). |
+| `extra` | Putar Lagi | Instant | `putar-dadu-2-kali.png` | **Satu lempar dadu lagi** di giliran yang sama (pesan **BONUS TURN!**); giliran **tidak** berganti sampai lempar berikutnya selesai. |
+
+##### H. Bot (mode 1 pemain)
+*   Jika hanya **1** manusia dipilih, permainan membuat **2** token: manusia = **P1**, **P2** adalah **bot** (giliran bot memicu lempar dadu otomatis).
+
+##### I. Aset & file terkait
+*   **Vue**: `src/client/views/SnakeAndLaddersView.vue` (permainan), `SnakeAndLaddersCategoryView.vue` (pemilih realm), `MiniGamesView.vue` (hub mini games).
+*   **Router**: `src/client/router/index.js` — nama rute `SnakeAndLaddersCategory` / `SnakeAndLadders`.
+*   **Statis**: `public/snake-and-ladders/` — papan (`board_new.webp`, dll.), token `p1.webp`…`p4.webp`, latar, GIF dadu, subfolder **`card-jugle/`** berisi gambar kartu sesuai tabel §G.
 
 ### 10. Header global (setelah login)
 *   **Pesan**: ikon ke `/instant-chat` dengan **badge merah** jumlah pesan Instant Chat belum dibaca (polling modul `instant_chat`).
@@ -208,7 +291,8 @@ npm start
 *   `src/client/views/MiniGamesView.vue`: Dashboard pusat permainan mini.
 *   `src/client/views/SolitaireView.vue`: Komponen permainan kartu Solitaire.
 *   `src/client/views/MemoryMatchView.vue`: Komponen permainan asah memori.
-*   `src/client/views/SnakeAndLaddersView.vue`: Komponen permainan ular tangga (Multiplayer/Bot).
+*   `src/client/views/SnakeAndLaddersView.vue`: Permainan **Island Quest** (ular tangga, kartu, jebakan, bot).
+*   `src/client/views/SnakeAndLaddersCategoryView.vue`: Hub pemilih realm **Snake and Ladders** (Choose Realm).
 *   `src/client/db.js`: Abstraksi data client-side & API Fetcher; helper Instant Chat unread (`migrateInstantChatReadMapOnce`, `countInstantChatUnread`, `setChatReadCursor`).
 *   `public/sound/`: Aset audio panggilan Instant Chat (`voice-call-ringing.mp3`, `video-call-ringing.mp3`, `end-decline-call.mp3`).
 
