@@ -1,5 +1,8 @@
 <template>
-  <div class="fixed inset-0 w-full h-[100svh] bg-[#0c1a1a] text-white flex flex-col items-center justify-center pt-14 lg:pt-20 overflow-hidden font-sans select-none">
+  <div
+    class="fixed inset-0 w-full h-[100dvh] min-h-[100svh] bg-[#0c1a1a] text-white flex flex-col items-center justify-center overflow-hidden font-sans select-none"
+    :class="playerCount ? 'pt-0' : 'pt-14 lg:pt-20'"
+  >
     <!-- 1. AMBIENT LAYERS -->
     <div class="absolute inset-0 z-0 bg-cover bg-center transition-all duration-1000 scale-[1.02]" 
          :style="{ backgroundImage: `url('/snake-and-ladders/background.webp')`, opacity: playerCount ? 1 : 0.4 }">
@@ -21,26 +24,7 @@
     <div class="absolute inset-0 z-[3] bg-gradient-to-tr from-[#0c1a1a]/80 via-transparent to-[#0c1a1a]/40 pointer-events-none"></div>
     <div class="absolute inset-0 z-[4] backdrop-blur-[2px] pointer-events-none"></div>
 
-    <!-- 2. HEADER -->
-    <Teleport to="#app-header-portal">
-      <div class="iq-portal-header flex items-center justify-between w-full h-full snake-portal-header px-4 lg:px-8">
-        <div class="flex items-center gap-4 group cursor-help">
-           <div class="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(245,158,11,0.5)] transform -rotate-6 group-hover:rotate-0 transition-transform duration-500">
-             <span class="text-black font-black italic text-2xl">#1</span>
-           </div>
-           <div class="flex flex-col -gap-1">
-             <h1 class="iq-header-title text-xl font-black text-white uppercase italic tracking-tighter drop-shadow-lg leading-none">Island Quest</h1>
-             <span class="iq-header-sub text-[8px] font-black tracking-[0.4em] text-amber-500/60 uppercase">Snake & Ladders v2</span>
-           </div>
-        </div>
-        <button @click="resetToSetup" class="iq-header-back group flex items-center gap-2 sm:gap-3 bg-white/5 backdrop-blur-3xl text-white px-5 sm:px-6 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl font-black text-[10px] sm:text-xs hover:bg-amber-500 hover:text-black transition-all shadow-2xl active:scale-95 uppercase tracking-widest border border-white/10">
-          <span class="opacity-50 group-hover:opacity-100 transition-opacity">{{ playerCount ? 'Abandon Mission' : 'Menu' }}</span>
-          <span class="text-xl group-hover:animate-bounce">🏠</span>
-        </button>
-      </div>
-    </Teleport>
-
-    <!-- 3. SETUP LOBBY -->
+    <!-- 2. SETUP LOBBY -->
     <Transition name="fade-blur">
       <div v-if="!playerCount" class="absolute inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
         <div class="realm-hub-content max-w-md sm:max-w-lg lg:max-w-2xl w-full text-center animate-in fade-in zoom-in duration-1000 relative">
@@ -82,8 +66,11 @@
       </div>
     </Transition>
 
-    <!-- 4. MAIN GAMEPLAY (Ultra-Responsive Landscape Layout) -->
-    <div v-if="playerCount" class="iq-play-root absolute inset-0 z-10 flex flex-row items-center justify-between p-2 lg:p-6 overflow-hidden pt-14 lg:pt-20">
+    <!-- 3. MAIN GAMEPLAY (Ultra-Responsive Landscape Layout) -->
+    <div
+      v-if="playerCount"
+      class="iq-play-root absolute inset-0 z-10 flex flex-row items-stretch justify-between gap-1 overflow-hidden min-h-0 p-1 sm:p-2 lg:p-4"
+    >
       
       <!-- SCOREBOARD (Responsive Width) -->
       <div class="iq-score-col hidden sm:flex flex-col gap-1.5 lg:gap-2.5 self-center w-[132px] lg:w-[188px] transition-all duration-1000 shrink-0">
@@ -110,7 +97,7 @@
       </div>
 
       <!-- BOARD STAGE (Responsive Scaling) -->
-      <div class="iq-board-stage flex-grow h-full flex flex-col items-center justify-center relative p-1 lg:p-4 overflow-hidden">
+      <div class="iq-board-stage flex-grow h-full min-h-0 flex flex-col items-center justify-center relative p-0.5 sm:p-1 lg:p-2 overflow-hidden">
         <Transition name="splash">
            <div v-if="message" class="absolute top-2 lg:top-8 z-[60] pointer-events-none w-full flex justify-center px-4">
               <div class="bg-amber-500 text-black px-3 sm:px-6 lg:px-8 py-1.5 sm:py-2 lg:py-3 rounded-lg lg:rounded-2xl font-black text-[10px] sm:text-xs lg:text-xl uppercase italic shadow-2xl border-2 lg:border-4 border-white animate-splash-pop transform -rotate-2">
@@ -119,9 +106,9 @@
            </div>
         </Transition>
 
-        <div class="relative w-full h-full flex items-center justify-center group/board perspective-2000 overflow-hidden">
+        <div class="relative w-full h-full min-h-0 flex items-center justify-center group/board perspective-2000 overflow-hidden">
           <div
-            class="iq-board-surface relative h-full max-h-[85vh] lg:max-h-[90vh] w-auto aspect-[1730/1677] bg-[#1a0f0a] rounded-lg lg:rounded-xl shadow-[0_24px_48px_rgba(0,0,0,0.75)] overflow-hidden border-2 lg:border-[5px] border-[#2b1d0e] shadow-inner will-change-transform transition-transform duration-500 ease-out"
+            class="iq-board-surface relative h-full max-h-full w-auto max-w-full aspect-[1730/1677] bg-[#1a0f0a] rounded-lg lg:rounded-xl shadow-[0_24px_48px_rgba(0,0,0,0.75)] overflow-hidden border-2 lg:border-[5px] border-[#2b1d0e] shadow-inner will-change-transform transition-transform duration-500 ease-out"
             :style="boardFocusStyle"
           >
             <img src="/snake-and-ladders/board_new.webp" class="w-full h-full object-cover select-none pointer-events-none" alt="Island Board" />
@@ -341,6 +328,17 @@
       </div>
     </Transition>
 
+    <button
+      v-if="playerCount && winner === null"
+      type="button"
+      class="fixed left-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[350] flex h-11 w-11 items-center justify-center rounded-full border border-white/25 bg-black/55 text-lg shadow-lg backdrop-blur-md transition-transform active:scale-95 touch-manipulation"
+      aria-label="Kembali ke pemilihan pemain"
+      title="Menu"
+      @click="resetToSetup"
+    >
+      🏠
+    </button>
+
     <!-- 9. ORIENTATION PROTECTOR (Portrait Only) -->
     <div class="orientation-protector lg:hidden">
       <div class="fixed inset-0 z-[600] bg-[#0c1a1a] flex flex-col items-center justify-center p-8 text-center bg-cover bg-center"
@@ -363,6 +361,8 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, reactive } from 'vue';
 import { useRouter } from 'vue-router';
+import { hideAppHeaderForFullscreenGame } from '../appChrome.js';
+
 const router = useRouter();
 
 // Landscape Lock Logic
@@ -1054,6 +1054,18 @@ const resetToSetup = () => {
   }
 };
 
+watch(
+  playerCount,
+  (n) => {
+    hideAppHeaderForFullscreenGame.value = n != null;
+  },
+  { immediate: true }
+);
+
+onUnmounted(() => {
+  hideAppHeaderForFullscreenGame.value = false;
+});
+
 watch(isBotTurn, (val) => {
   if (
     val &&
@@ -1219,25 +1231,8 @@ watch(isBotTurn, (val) => {
     animation: totemLandscapeShort 3.5s ease-in-out infinite;
   }
 
-  .iq-portal-header .iq-header-title {
-    font-size: 0.875rem !important;
-  }
-  .iq-portal-header .iq-header-sub {
-    font-size: 0.5rem !important;
-    letter-spacing: 0.2em !important;
-  }
-  .iq-header-back {
-    padding: 0.3rem 0.55rem !important;
-    font-size: 0.5rem !important;
-    border-radius: 0.5rem !important;
-  }
-  .iq-header-back span.text-xl {
-    font-size: 0.95rem !important;
-  }
-
   .iq-play-root {
     padding: 0.25rem 0.35rem !important;
-    padding-top: 3rem !important;
   }
   .iq-score-col {
     width: 6.5rem !important;

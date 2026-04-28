@@ -238,6 +238,7 @@
 import { computed, onMounted, onBeforeUnmount, watch, ref, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { toastState, showToast } from './toast.js';
+import { hideAppHeaderForFullscreenGame } from './appChrome.js';
 import { authState, setAuth, apiFetch, getModuleData, countInstantChatUnread } from './db.js';
 import {
   rtcState,
@@ -461,6 +462,7 @@ function onChatReadUpdated() {
 }
 
 const appHeaderVisible = computed(() => {
+  if (hideAppHeaderForFullscreenGame.value) return false;
   if (route.path === '/login') return false;
   if (route.path.includes('/wedding-invitation/preview')) return false;
   // Always show on home and other pages
