@@ -108,7 +108,7 @@
 
         <div class="relative w-full h-full min-h-0 flex items-center justify-center group/board perspective-2000 overflow-hidden">
           <div
-            class="iq-board-surface relative h-full max-h-full w-auto max-w-full aspect-[1730/1677] bg-[#1a0f0a] rounded-lg lg:rounded-xl shadow-[0_24px_48px_rgba(0,0,0,0.75)] overflow-hidden border-2 lg:border-[5px] border-[#2b1d0e] shadow-inner will-change-transform transition-transform duration-500 ease-out"
+            class="iq-board-surface relative h-full max-h-full w-auto max-w-full aspect-[1730/1677] bg-[#1a0f0a] rounded-lg lg:rounded-xl shadow-[0_24px_48px_rgba(0,0,0,0.75)] overflow-hidden border-2 lg:border-[5px] border-[#2b1d0e] shadow-inner will-change-transform transition-[transform] duration-[820ms] ease-[cubic-bezier(0.4,0,0.15,1)]"
             :style="boardFocusStyle"
           >
             <img src="/snake-and-ladders/board_new.webp" class="w-full h-full object-cover select-none pointer-events-none" alt="Island Board" />
@@ -127,7 +127,7 @@
                  <div v-for="(p, pIdx) in players" :key="'persistent-p-'+pIdx"
                       class="absolute w-[10%] h-[10%] transition-all transform player-token-container z-50 animate-in fade-in zoom-in"
                       :class="[
-                        isHopping && currentPlayerIndex === pIdx ? 'duration-[480ms] player-transition-hop' : 'duration-500 player-transition-smooth'
+                        isHopping && currentPlayerIndex === pIdx ? 'duration-[560ms] player-transition-hop' : 'duration-[620ms] player-transition-smooth'
                       ]"
                       :style="getPlayerGlobalStyle(pIdx)">
                    <div class="relative flex items-end justify-center w-full h-full pb-[3%] translate-z-0">
@@ -260,7 +260,15 @@
                 <h2 class="iq-modal-draw-card-title text-base sm:text-lg lg:text-xl font-black text-white italic uppercase tracking-tighter mb-1">{{ drawnCard.name }}</h2>
                 <p class="iq-modal-draw-card-desc text-white/60 text-[8px] sm:text-[9px] mb-4 sm:mb-5 font-medium leading-relaxed">{{ drawnCard.desc }}</p>
                 
-                <button v-if="drawnCard.type === 'Persistent'" @click="closeCardModal" class="iq-modal-draw-card-btn w-full bg-amber-500 text-black py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-black text-sm sm:text-base italic uppercase tracking-tighter shadow-[0_4px_0_#b45309] active:translate-y-1 active:shadow-none transition-all">
+                <div v-if="drawnCard.id === 'serangan'" class="flex flex-col gap-2">
+                  <button type="button" class="iq-modal-draw-card-btn w-full bg-amber-500 text-black py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-black text-xs sm:text-sm italic uppercase tracking-tighter shadow-[0_4px_0_#b45309] active:translate-y-1 active:shadow-none transition-all" @click="onSeranganDrawUse">
+                    Pakai sekarang
+                  </button>
+                  <button type="button" class="w-full py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-black text-[10px] sm:text-xs uppercase tracking-widest border border-white/15 bg-white/5 text-white/90 hover:bg-white/10 transition-all" @click="onSeranganDrawSave">
+                    Simpan ke tas
+                  </button>
+                </div>
+                <button v-else-if="drawnCard.type === 'Persistent'" type="button" class="iq-modal-draw-card-btn w-full bg-amber-500 text-black py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-black text-sm sm:text-base italic uppercase tracking-tighter shadow-[0_4px_0_#b45309] active:translate-y-1 active:shadow-none transition-all" @click="closeCardModal">
                    EQUIP PACK
                 </button>
                 <div v-else class="iq-modal-draw-card-auto text-amber-500 text-[9px] font-black italic uppercase tracking-widest animate-pulse">Activating automatically...</div>
@@ -269,17 +277,15 @@
        </div>
     </Transition>
 
-    <!-- 7b. JEBAKAN + IMUN (pilihan) -->
+    <!-- 7b. Umpan balik kartu otomatis / pertahanan -->
     <Transition name="fade-blur">
-      <div v-if="pendingImunOffer" class="fixed inset-0 z-[440] flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
-        <div class="max-w-sm w-full bg-[#1a110d] rounded-2xl border-2 border-amber-800 p-5 text-center shadow-2xl">
-          <p class="text-amber-500 font-black text-[10px] uppercase tracking-widest mb-2">Jebakan!</p>
-          <p class="text-white/90 text-sm font-bold mb-1">Kamu punya <span class="text-amber-400">Imun</span> di tas.</p>
-          <p class="text-white/50 text-[10px] mb-5 leading-relaxed">Buka tas dan pakai Imun untuk menolak efek jebakan, atau terima jebakan.</p>
-          <div class="flex flex-col gap-2">
-            <button type="button" @click="openInventory(pendingImunOffer.playerIndex)" class="w-full py-3 rounded-xl bg-amber-500 text-black font-black text-xs uppercase tracking-tighter shadow-[0_4px_0_#b45309] active:translate-y-0.5">Buka tas (pakai Imun)</button>
-            <button type="button" @click="confirmTrapAcceptJebakan" class="w-full py-2.5 rounded-xl bg-white/10 text-white/80 font-black text-[10px] uppercase tracking-widest border border-white/10 hover:bg-white/15">Terima jebakan</button>
-          </div>
+      <div v-if="feedbackModal" class="fixed inset-0 z-[445] flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
+        <div class="max-w-sm w-full bg-[#1a110d] rounded-2xl border-2 border-amber-800/80 p-5 text-center shadow-2xl">
+          <p class="text-amber-500 font-black text-[10px] uppercase tracking-widest mb-2">{{ feedbackModal.title }}</p>
+          <p class="text-white/85 text-sm font-medium mb-6 leading-relaxed">{{ feedbackModal.text }}</p>
+          <button type="button" class="w-full py-3 rounded-xl bg-amber-500 text-black font-black text-xs uppercase tracking-tighter shadow-[0_4px_0_#b45309] active:translate-y-0.5" @click="closeFeedbackModal">
+            OK
+          </button>
         </div>
       </div>
     </Transition>
@@ -478,16 +484,46 @@ const clearBoardFocus = () => {
   boardFocus.originY = 50;
 };
 
+/** Langkah token & zoom papan — diselaraskan dengan CSS transition */
+const HOP_STEP_MS = 560;
+const HOP_PAUSE_MS = 42;
+const BOARD_ZOOM_OUT_MS = 880;
+const SPECIAL_MOVE_MS = 1050;
+
+const feedbackModal = ref(null);
+let feedbackWaitResolve = null;
+
+function openFeedbackWait(payload) {
+  feedbackModal.value = payload;
+  return new Promise((resolve) => {
+    feedbackWaitResolve = resolve;
+  });
+}
+
+function closeFeedbackModal() {
+  feedbackModal.value = null;
+  const finish = feedbackWaitResolve;
+  feedbackWaitResolve = null;
+  finish?.();
+}
+
 // --- CARD & TRAP STATE ---
 const showCardModal = ref(false);
 const drawnCard = ref(null);
 const showInventory = ref(false);
 const inventoryPlayerIndex = ref(0);
 const extraRoll = ref(false);
-const pendingImunOffer = ref(null); // { playerIndex, position, trap }
-let trapImunResolve = null;
 const showSeranganModal = ref(false);
 const seranganInventoryCardIndex = ref(-1);
+
+const PERSIST_SNAP_CLOSE = new Set(['imun', 'pertahanan', 'save_jaring', 'save_pasir']);
+
+const blocksGameplay = computed(
+  () =>
+    showCardModal.value ||
+    !!feedbackModal.value ||
+    showSeranganModal.value
+);
 
 const isBotPlayer = (pIdx) => playerCount.value === 1 && pIdx === 1;
 
@@ -508,10 +544,8 @@ const handleRollClick = () => {
     isRolling.value ||
     isMoving.value ||
     winner.value !== null ||
-    showCardModal.value ||
     isBotTurn.value ||
-    pendingImunOffer.value ||
-    showSeranganModal.value
+    blocksGameplay.value
   ) {
     return;
   }
@@ -556,9 +590,7 @@ const rollDice = (forcedResult = null) => {
     isRolling.value ||
     isMoving.value ||
     winner.value !== null ||
-    showCardModal.value ||
-    pendingImunOffer.value ||
-    showSeranganModal.value
+    blocksGameplay.value
   ) {
     return;
   }
@@ -629,19 +661,96 @@ const drawCard = () => {
   const p = players.value[currentPlayerIndex.value];
   const card = cardDeck[Math.floor(Math.random() * cardDeck.length)];
   drawnCard.value = card;
-  showCardModal.value = true;
 
   if (card.type === 'Instant') {
+    showCardModal.value = true;
     if (card.id === 'extra') {
       extraRoll.value = true;
     }
     setTimeout(() => {
       void closeCardModal();
     }, 2200);
-  } else {
-    p.inventory.push(card);
+    return;
   }
+
+  p.inventory.push(card);
+
+  if (PERSIST_SNAP_CLOSE.has(card.id)) {
+    drawnCard.value = null;
+    showCardModal.value = false;
+    message.value =
+      card.id === 'imun'
+        ? 'Imun masuk tas · aktif otomatis saat jebakan.'
+        : card.id === 'pertahanan'
+          ? 'Pertahanan masuk tas · aktif otomatis saat diserang.'
+          : card.id === 'save_jaring'
+            ? 'Penyelamatan Jaring masuk tas · otomatis di jaring laba-laba.'
+            : 'Penyelamatan Pasir masuk tas · otomatis di pasir hisap.';
+    setTimeout(() => {
+      message.value = '';
+      if (winner.value !== null) return;
+      advanceToNextPlayer();
+    }, 720);
+    return;
+  }
+
+  if (card.id === 'serangan') {
+    showCardModal.value = true;
+    if (isBotPlayer(currentPlayerIndex.value)) {
+      setTimeout(botChooseSeranganDrawAction, 650);
+    }
+    return;
+  }
+
+  showCardModal.value = true;
 };
+
+function botChooseSeranganDrawAction() {
+  if (!showCardModal.value || drawnCard.value?.id !== 'serangan') return;
+  const others = players.value.filter((_, i) => i !== currentPlayerIndex.value);
+  if (others.length > 0) {
+    onSeranganDrawUse();
+  } else {
+    onSeranganDrawSave();
+  }
+}
+
+function onSeranganDrawSave() {
+  showCardModal.value = false;
+  drawnCard.value = null;
+  if (winner.value !== null) return;
+  advanceToNextPlayer();
+}
+
+function onSeranganDrawUse() {
+  const p = players.value[currentPlayerIndex.value];
+  let idx = -1;
+  for (let i = p.inventory.length - 1; i >= 0; i--) {
+    if (p.inventory[i].id === 'serangan') {
+      idx = i;
+      break;
+    }
+  }
+  showCardModal.value = false;
+  drawnCard.value = null;
+  if (idx === -1) return;
+  seranganInventoryCardIndex.value = idx;
+  showSeranganModal.value = true;
+  if (isBotPlayer(currentPlayerIndex.value)) {
+    setTimeout(botPickSeranganTarget, 700);
+  }
+}
+
+function botPickSeranganTarget() {
+  if (!showSeranganModal.value || seranganInventoryCardIndex.value < 0) return;
+  const targets = seranganTargetIndices.value;
+  if (targets.length === 0) {
+    closeSeranganModal();
+    return;
+  }
+  const pick = targets[Math.floor(Math.random() * targets.length)];
+  executeSerangan(pick);
+}
 
 function applyForwardWithBounce(p, steps) {
   let goingReverse = false;
@@ -664,40 +773,23 @@ function advanceToNextPlayer() {
   message.value = '';
 }
 
-function resolveTrapImun(outcome) {
-  pendingImunOffer.value = null;
-  const fn = trapImunResolve;
-  trapImunResolve = null;
-  fn?.(outcome);
-}
-
 async function applyTrapEffectFull(p, trap) {
   if (trap.type === 'pasir_hisap' || trap.type === 'jaring_laba_laba') {
     p.trappedTurns = 3;
     p.trapType = trap.type === 'pasir_hisap' ? 'pasir' : 'laba';
     message.value = trap.msg;
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, 1400));
     return 'trapped';
   }
   message.value = trap.msg;
-  await new Promise((r) => setTimeout(r, 1000));
+  await new Promise((r) => setTimeout(r, 900));
   isSpecialMoving.value = true;
   p.position = trap.end;
   applyBoardFocus(p.position);
-  await new Promise((r) => setTimeout(r, 1000));
+  await new Promise((r) => setTimeout(r, SPECIAL_MOVE_MS));
   isSpecialMoving.value = false;
   return 'monkey_moved';
 }
-
-const confirmTrapAcceptJebakan = async () => {
-  const pend = pendingImunOffer.value;
-  if (!pend) return;
-  const p = players.value[pend.playerIndex];
-  const trap = pend.trap;
-  pendingImunOffer.value = null;
-  const sub = await applyTrapEffectFull(p, trap);
-  resolveTrapImun(sub === 'monkey_moved' ? 'applied_monkey' : 'applied_sticky');
-};
 
 async function resolveBoardAfterLanding(p) {
   let continueChecking = true;
@@ -708,7 +800,7 @@ async function resolveBoardAfterLanding(p) {
       winner.value = currentPlayerIndex.value;
       message.value = 'MISSION COMPLETE!';
       applyBoardFocus(100);
-      setTimeout(() => clearBoardFocus(), 600);
+      setTimeout(() => clearBoardFocus(), BOARD_ZOOM_OUT_MS);
       return 'done';
     }
 
@@ -717,11 +809,11 @@ async function resolveBoardAfterLanding(p) {
 
     if (snake) {
       message.value = snake.msg;
-      await new Promise((r) => setTimeout(r, 900));
+      await new Promise((r) => setTimeout(r, 850));
       isSpecialMoving.value = true;
       p.position = snake.end;
       applyBoardFocus(p.position);
-      await new Promise((r) => setTimeout(r, 900));
+      await new Promise((r) => setTimeout(r, SPECIAL_MOVE_MS));
       isSpecialMoving.value = false;
       continueChecking = true;
       continue;
@@ -729,11 +821,11 @@ async function resolveBoardAfterLanding(p) {
 
     if (ladder) {
       message.value = ladder.msg;
-      await new Promise((r) => setTimeout(r, 900));
+      await new Promise((r) => setTimeout(r, 850));
       isSpecialMoving.value = true;
       p.position = ladder.end;
       applyBoardFocus(p.position);
-      await new Promise((r) => setTimeout(r, 900));
+      await new Promise((r) => setTimeout(r, SPECIAL_MOVE_MS));
       isSpecialMoving.value = false;
       continueChecking = true;
       continue;
@@ -741,26 +833,37 @@ async function resolveBoardAfterLanding(p) {
 
     const trap = traps[p.position];
     if (trap) {
-      const imunIdx = p.inventory.findIndex((c) => c.id === 'imun');
-      const botHere = isBotPlayer(currentPlayerIndex.value);
-
-      if (imunIdx !== -1 && !botHere) {
-        pendingImunOffer.value = {
-          playerIndex: currentPlayerIndex.value,
-          position: p.position,
-          trap
-        };
-        const outcome = await new Promise((resolve) => {
-          trapImunResolve = resolve;
-        });
-        if (outcome === 'skipped') {
+      if (trap.type === 'pasir_hisap') {
+        const si = p.inventory.findIndex((c) => c.id === 'save_pasir');
+        if (si !== -1) {
+          p.inventory.splice(si, 1);
+          await openFeedbackWait({
+            title: 'Penyelamatan Pasir',
+            text: 'Kartu Penyelamatan Pasir otomatis melindungi kamu dari Pasir Hisap.',
+          });
           break;
         }
-        if (outcome === 'applied_monkey') {
-          continueChecking = true;
-          continue;
+      }
+      if (trap.type === 'jaring_laba_laba') {
+        const sj = p.inventory.findIndex((c) => c.id === 'save_jaring');
+        if (sj !== -1) {
+          p.inventory.splice(sj, 1);
+          await openFeedbackWait({
+            title: 'Penyelamatan Jaring',
+            text: 'Kartu Penyelamatan Jaring otomatis melindungi kamu dari Jaring Laba-laba.',
+          });
+          break;
         }
-        return 'done';
+      }
+
+      const imunIdx = p.inventory.findIndex((c) => c.id === 'imun');
+      if (imunIdx !== -1) {
+        p.inventory.splice(imunIdx, 1);
+        await openFeedbackWait({
+          title: 'Imun aktif',
+          text: `Jebakan dicegah — ${trap.msg}`,
+        });
+        break;
       }
 
       const sub = await applyTrapEffectFull(p, trap);
@@ -790,6 +893,7 @@ const closeCardModal = async () => {
   drawnCard.value = null;
 
   if (card.type === 'Persistent') {
+    if (card.id === 'serangan') return;
     if (winner.value !== null) return;
     advanceToNextPlayer();
     return;
@@ -825,7 +929,7 @@ const closeCardModal = async () => {
     winner.value = currentPlayerIndex.value;
     message.value = 'MISSION COMPLETE!';
     applyBoardFocus(100);
-    setTimeout(() => clearBoardFocus(), 600);
+    setTimeout(() => clearBoardFocus(), BOARD_ZOOM_OUT_MS);
     return;
   }
 
@@ -867,9 +971,9 @@ const movePlayer = async (steps) => {
 
     applyBoardFocus(p.position);
     
-    await new Promise(r => setTimeout(r, 480));
+    await new Promise((r) => setTimeout(r, HOP_STEP_MS));
     isHopping.value = false;
-    await new Promise(r => setTimeout(r, 28)); 
+    await new Promise((r) => setTimeout(r, HOP_PAUSE_MS));
   }
   
   if (p.position === 100) {
@@ -877,13 +981,13 @@ const movePlayer = async (steps) => {
     isMoving.value = false;
     applyBoardFocus(100);
     message.value = 'MISSION COMPLETE!';
-    setTimeout(() => clearBoardFocus(), 600);
+    setTimeout(() => clearBoardFocus(), BOARD_ZOOM_OUT_MS);
     return;
   }
 
   const sub = await resolveBoardAfterLanding(p);
   isMoving.value = false;
-  clearBoardFocus();
+  setTimeout(() => clearBoardFocus(), BOARD_ZOOM_OUT_MS);
   if (sub === 'card_drawn') return;
 
   if (extraRoll.value) {
@@ -933,7 +1037,7 @@ const closeSeranganModal = () => {
   seranganInventoryCardIndex.value = -1;
 };
 
-const executeSerangan = (targetIdx) => {
+const executeSerangan = async (targetIdx) => {
   const atkIdx = currentPlayerIndex.value;
   const p = players.value[atkIdx];
   const cIdx = seranganInventoryCardIndex.value;
@@ -948,12 +1052,19 @@ const executeSerangan = (targetIdx) => {
   const target = players.value[targetIdx];
   const defIdx = target.inventory.findIndex((c) => c.id === 'pertahanan');
   if (defIdx !== -1) {
-    message.value = `P${targetIdx + 1} MENGGUNAKAN PERTAHANAN!`;
     target.inventory.splice(defIdx, 1);
-  } else {
-    message.value = `SERANGAN KE P${targetIdx + 1}! MUNDUR 3 LANGKAH!`;
-    target.position = Math.max(1, target.position - 3);
+    p.inventory.splice(cIdx, 1);
+    closeSeranganModal();
+    showInventory.value = false;
+    await openFeedbackWait({
+      title: 'Pertahanan aktif',
+      text: `P${targetIdx + 1} memakai kartu Pertahanan. Serangan gagal.`,
+    });
+    message.value = '';
+    return;
   }
+  message.value = `SERANGAN KE P${targetIdx + 1}! MUNDUR 3 LANGKAH!`;
+  target.position = Math.max(1, target.position - 3);
   p.inventory.splice(cIdx, 1);
   closeSeranganModal();
   showInventory.value = false;
@@ -985,15 +1096,7 @@ const useInventoryCard = (cIdx) => {
   }
 
   if (card.id === 'imun') {
-    const pend = pendingImunOffer.value;
-    if (pend && pend.playerIndex === pIdx && pend.position === p.position) {
-      p.inventory.splice(cIdx, 1);
-      message.value = 'IMUN DIPAKAI! JEBAKAN DINEGASI!';
-      showInventory.value = false;
-      resolveTrapImun('skipped');
-    } else {
-      message.value = 'IMUN HANYA SAAT MENGHADAPI JEBAKAN (IKUTI TAMPILAN PENGUMUMAN).';
-    }
+    message.value = 'Imun dipakai otomatis saat menginjak petak jebakan.';
     setTimeout(() => {
       message.value = '';
     }, 2200);
@@ -1039,8 +1142,8 @@ const resetGame = () => {
   diceRotationStyle.value = { transform: 'rotateX(0deg) rotateY(0deg)' };
   showInventory.value = false;
   extraRoll.value = false;
-  pendingImunOffer.value = null;
-  trapImunResolve = null;
+  feedbackModal.value = null;
+  feedbackWaitResolve = null;
   showSeranganModal.value = false;
   seranganInventoryCardIndex.value = -1;
   clearBoardFocus();
@@ -1072,9 +1175,7 @@ watch(isBotTurn, (val) => {
     !winner.value &&
     !isRolling.value &&
     !isMoving.value &&
-    !showCardModal.value &&
-    !pendingImunOffer.value &&
-    !showSeranganModal.value
+    !blocksGameplay.value
   ) {
     setTimeout(rollDice, 1200);
   }
@@ -1109,14 +1210,14 @@ watch(isBotTurn, (val) => {
 /* Hop per langkah: arc halus (translate3d), rendah, landing di dasar tile */
 @keyframes monopolyHop {
   0% { transform: translate3d(0, 0, 0) scale(1, 1); }
-  15% { transform: translate3d(0, -4%, 0) scale(1.015, 0.995); }
-  38% { transform: translate3d(0, -10%, 0) scale(1.02, 0.992); }
-  55% { transform: translate3d(0, -7%, 0) scale(1.012, 0.998); }
-  78% { transform: translate3d(0, -2%, 0) scale(1.005, 1); }
+  18% { transform: translate3d(0, -5%, 0) scale(1.012, 0.994); }
+  42% { transform: translate3d(0, -11%, 0) scale(1.018, 0.991); }
+  58% { transform: translate3d(0, -8%, 0) scale(1.01, 0.996); }
+  82% { transform: translate3d(0, -2.5%, 0) scale(1.004, 1); }
   100% { transform: translate3d(0, 0, 0) scale(1, 1); }
 }
 .animate-monopoly-hop { 
-  animation: monopolyHop 0.48s cubic-bezier(0.37, 0, 0.21, 1);
+  animation: monopolyHop 0.56s cubic-bezier(0.34, 0.02, 0.16, 1);
   transform-origin: bottom center;
   will-change: transform;
 }
@@ -1130,7 +1231,7 @@ watch(isBotTurn, (val) => {
   100% { transform: translate3d(0, 0, 0) scale(1, 1); }
 }
 .animate-quest-jump {
-  animation: questJump 0.88s cubic-bezier(0.33, 0, 0.2, 1);
+  animation: questJump 1.05s cubic-bezier(0.33, 0, 0.18, 1);
   transform-origin: bottom center;
   will-change: transform;
 }
@@ -1170,12 +1271,16 @@ watch(isBotTurn, (val) => {
   pointer-events: none; 
   backface-visibility: hidden;
 }
-/* Perpindahan antar tile: ease simetris agar landing presisi di kotak */
+/* Perpindahan antar tile: ease halus, landing presisi */
 .player-transition-hop {
   transition-property: left, top;
-  transition-timing-function: cubic-bezier(0.45, 0, 0.55, 1);
+  transition-duration: 560ms;
+  transition-timing-function: cubic-bezier(0.37, 0.02, 0.23, 1);
 }
-.player-transition-smooth { transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+.player-transition-smooth {
+  transition-duration: 620ms;
+  transition-timing-function: cubic-bezier(0.35, 0, 0.22, 1);
+}
 
 /* —— Sama dengan /mini-games/snake-and-ladders: mobile & tablet landscape —— */
 @media (orientation: landscape) and (max-height: 760px) and (max-width: 1279px) {
